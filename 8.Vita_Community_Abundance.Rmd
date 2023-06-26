@@ -1,0 +1,693 @@
+---
+title: "Viruses from millipede hindguts"
+subtitle: "Community abundance of genes"
+author: "Nweze Julius"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    code_folding: show
+    dev: png
+    df_print: kable
+    fig_caption: yes
+    highlight: pygments
+    keep_md: yes
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '5'
+link-citations: yes
+csl: fems-microbiology-ecology.csl
+subtitle: Viral analysis
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries, include=F}
+# Load libraries
+#.libPaths(c('~/R/library', .libPaths())) # Uncomment if you have no write access to R path
+
+repo <- "http://cran.wu.ac.at"
+lib.loc <- Sys.getenv("R_LIBS_USER")
+
+update.packages(
+    lib.loc, 
+    repos = repo,
+    ask = FALSE
+)
+
+.cran_libs <- c(
+ "knitr", # A General-Purpose Package for Dynamic Report Generation in R
+ "kableExtra", # Construct Complex Table with 'kable' and Pipe Syntax
+#  "rmarkdown", # Dynamic Documents for R
+  "extrafont", # for extra figure fonts
+  "tidyverse", # for dplyr forcats ggplot2 readr tibble
+  "readODS", # #Read ODS Files
+ "grid", # The Grid Graphics Package
+#  "magrittr", # pipes
+  "scales", # Generic plot scaling methods
+  "svglite", # for svg files
+#  "vagen",
+"Polychrome",
+"Cairo",
+"ComplexHeatmap",
+"circlize",
+ "RColorBrewer",
+ "car", # Companion to Applied Regression
+ "rcompanion", #Functions to Support Extension Education Program Evaluation
+ "multcomp", # Simultaneous Inference in General Parametric Models
+ "nlme", # Fit Linear Model Using Generalized Least Squares
+# "ggResidpanel", # Panels and Interactive Versions of Diagnostic Plots using
+ "emmeans", # Estimated Marginal Means, aka Least-Squares Means
+"performance" # Assessment of Regression Models Performance 
+) 
+
+.inst <- .cran_libs %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(.cran_libs[!.inst],
+                    repos = repo,
+                    lib = lib.loc)
+}
+
+.bioc_libs <- c(
+  #"multtest", #Resampling-based multiple hypothesis testing
+)
+
+.bioc_inst <- .bioc_libs %in% installed.packages()
+if (any(!.bioc_inst)) {
+   if (!requireNamespace("BiocManager", quietly = TRUE))
+   install.packages("BiocManager")
+   BiocManager::install(ask = F, lib = lib.loc)  # upgrade bioC packages
+   BiocManager::install(.bioc_libs[!.bioc_inst], ask = F, lib = lib.loc)
+}
+
+.local_libs <- c()
+
+.inst <- names(.local_libs) %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(paste0("~/R/", .local_libs[!.inst]) ,repos = NULL, type = "source", lib = lib.loc)
+}
+
+.github_libs <- c(
+  "wilkelab/ggtext", # Improved text rendering support for 'ggplot2' 
+  "ACCLAB/dabestr" # Data Analysis using Bootstrap-Coupled Estimation 
+)
+
+.github_lib_names <- stringr::str_replace(.github_libs, ".*/(.*)$", "\\1")
+
+.github_inst <- .github_lib_names %in% installed.packages()
+if (any(!.github_inst)) {
+  devtools::install_github(.github_libs[!.github_inst],
+                           lib = lib.loc,
+                           dependencies = TRUE)
+}
+
+# Load packages into session, and print package version
+(loaded.libs <- sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), require, character.only = TRUE))
+if (!all(loaded.libs)) {stop(paste("Package(s):", names(loaded.libs[loaded.libs == FALSE]), "could not be loaded"))}
+sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), packageVersion)
+```
+
+```{r style settings, include=F}
+options(width = 90, knitr.table.format = "html") 
+opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  cache = TRUE,
+  dev = "svglite",
+  fig.ext = "svg",
+  dpi = 300,
+#  fig.width = 12,
+#  fig.height = 8,
+  cache.path = "Viruses_cache/",
+  fig.path = "Viruses_figs/"
+)
+f_name <- "DejaVu Sans" #sub("\\s//", "", f_name)
+f_size <- 14
+font_import(pattern = "DejaVuSans", prompt = FALSE)
+loadfonts() # registers fonts
+theme_set(theme_bw(base_size = f_size, base_family = f_name)) # set theme for plots
+pom4 <- ggpomological:::pomological_palette[c(2, 9, 3, 1)] # set colours
+```
+
+
+### *Viruses from the hindguts of E. pulchripes and G. connexa *
+
+# Load viral taxa classification
+```{r load vitamin Epi MG data, cache = T}
+# Load the number of identified viruses
+read_ods("EpiGlo.Vitamins.MGMT.result.ods", sheet = "Arranged_EpiGlo_MG.Phyla2",  col_names = TRUE) ->
+Vita_EpiGlo_phyla2
+
+
+# Save an object to a file
+ saveRDS(Vita_EpiGlo_phyla2, file = "RDS/Vita_EpiGlo_phyla2.rds")
+ Vita_EpiGlo_phyla2 <- readRDS("RDS/Vita_EpiGlo_phyla2.rds")
+ 
+ 
+# Load viral abundance
+read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "Viral_abundance_MGMT",  col_names = TRUE) ->
+Viral_abund 
+
+#Save an object to a file
+saveRDS(Viral_abund, file = "RDS/Viral_abund.rds")
+  Viral_abund <- readRDS("RDS/Viral_abund.rds")
+ 
+# Load  the selected single-viral genomes
+read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "Viral_taxa_MGMT",  col_names = TRUE) ->
+Viral_taxa
+
+# Save an object to a file
+saveRDS( Viral_taxa, file = "RDS/Viral_taxa.rds")
+Viral_taxa <- readRDS("RDS/Viral_taxa.rds")
+  
+  
+# Merge viral taxa and abundance 
+Viral_Abund_taxa <-  Viral_abund %>% right_join(Viral_taxa , by=c("Species.type", "seq_name"), multiple = "all", relationship = "many-to-many") 
+
+# Save in .csv file
+write_csv(Viral_Abund_taxa, "R_output/Viral_Abund_taxa.ods")
+
+
+###################### Full virus
+
+# Completeness
+read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "True_virus_completeness",  col_names = TRUE) ->
+full_virus_completeness
+# Save an object to a file
+saveRDS( full_virus_completeness, file = "RDS/ full_virus_completeness.rds")
+  full_virus_completeness <- readRDS("RDS/ full_virus_completeness.rds")
+  
+
+  
+# True_virus_taxa
+ # read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "True_virus_taxa",  col_names = TRUE) ->
+ #  True_virus_taxa
+# # Save an object to a file
+# saveRDS(True_virus_taxa, file = "RDS/True_virus_taxa.rds")
+ True_virus_taxa <- readRDS("RDS/True_virus_taxa.rds")
+ 
+ 
+# Viral_taxa_single_double
+ # read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "Viral_taxa_single_double",  col_names = TRUE) ->
+ # Viral_taxa_single_double
+# # Save an object to a file
+# saveRDS(Viral_taxa_single_double, file = "RDS/Viral_taxa_single_double.rds")
+Viral_taxa_single_double <- readRDS("RDS/Viral_taxa_single_double.rds")
+
+
+# Viral abundance
+ # read_ods("EpiGlo.contigs.taxonomy.ods", sheet = "True_virus_abundance",  col_names = TRUE) ->
+ # True_virus_abundance
+# # Save an object to a file
+# saveRDS(True_virus_abundance, file = "RDS/True_virus_abundance.rds")
+True_virus_abundance <- readRDS("RDS/True_virus_abundance.rds")
+
+
+# Join completeness with abundance
+Full_complete_abund <- full_virus_completeness %>% right_join(True_virus_abundance, by=c("Species.type", "Seq.type", "Contigs"), multiple = "all", relationship = "many-to-many") 
+
+# Save in .csv file
+write_csv(Full_complete_abund, "R_output/Full_complete_abund.ods")
+
+
+# Add add taxa
+
+Full_complete_taxa_abund <- Full_complete_abund %>% right_join(True_virus_taxa, by=c("Species.type",	"Seq.type",	"Contigs"), multiple = "all") 
+
+
+# Save in .csv file
+write_csv(Full_complete_taxa_abund, "R_output/Full_complete_taxa_abund.ods")
+
+
+# Add viral segment
+Full_complete_taxa_seq <- Viral_taxa_single_double %>% right_join(Full_complete_taxa_abund, by=c("Species.type",	"Seq.type",	"Contigs"), multiple = "all", relationship = "many-to-many") %>% drop_na(checkv_quality)
+
+
+
+# Save in .csv file
+write_csv(Full_complete_taxa_seq, "R_output/Full_complete_taxa_seq.ods")
+```
+
+
+
+
+**Viral taxa**
+```{r virus taxa data, cache = T}
+# Number of partial and full viral sequences
+# Number of free virus and provirus
+Viral_Abund_taxa %>%
+#subset(Seq.type =="Metagenome") %>%
+group_by(Species.type, Seq.type, `Viral class`, `Identified viral sequence`) %>%
+mutate(`Identified viral sequence` = factor(`Identified viral sequence`, levels = c("Full", "Partial"))) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type) %>%
+mutate(Percent = Counts / sum(Counts) * 100) %>%
+group_by(Species.type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+
+
+
+# Viral_Abund_taxa %>%
+# subset(Seq.type =="Metagenome") %>%
+# group_by(Species.type, `Identified viral sequence`) %>%
+# mutate(`Identified viral sequence` = factor(`Identified viral sequence`, levels = c("Full", "Partial"))) %>%
+# reframe(Counts = n())   ->
+# Vir1
+# # 
+# # 
+# order= c("G. connexa", "E. pulchripes", "Full", "Partial")
+#  set.seed(8000)
+# # now, the image with rotated labelsgap = rep(1, length(order))par(cex = 3, mar = c(0, 0, 0, 0))
+# par(cex = 2.2, mar = c(0, 0, 0, 0))
+# chordDiagram(Vir1, annotationTrack = "grid", order = order,  preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(9))
+# circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+#   xlim = get.cell.meta.data("xlim")
+#   ylim = get.cell.meta.data("ylim")
+#   sector.name = get.cell.meta.data("sector.index")
+#   circos.text(mean(xlim), ylim[1] + .1, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+#   circos.axis(h = "top", labels.cex = 0.5, major.tick.length = 0.2, sector.index = sector.name, track.index = 2)
+# }, bg.border = NA)
+# 
+# 
+# 
+# circos.clear()
+# 
+# 
+# # Phylum
+# 
+# Viral_Abund_taxa %>%
+# subset(Seq.type =="Metagenome") %>%
+# group_by(Species.type, Phylum) %>%
+# mutate(Phylum = coalesce(Phylum, "Unclassified viruses"))  %>%
+# reframe(Counts = n())   ->
+# VirP
+# 
+# order= c("G. connexa", "E. pulchripes", "Cressdnaviricota", "Hofneiviricota", "Nucleocytoviricota", "Peploviricota", "Phixviricota", "Preplasmiviricota", "Uroviricota", "Cossaviricota", "Kitrinoviricota", "Negarnaviricota", "Unclassified viruses")
+#  set.seed(388000) 
+# # now, the image with rotated labelsgap = rep(1, length(order))par(cex = 3, mar = c(0, 0, 0, 0))
+# par(cex = 2.2, mar = c(0, 0, 0, 0))
+# chordDiagram(VirP, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(9))
+# circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+#   xlim = get.cell.meta.data("xlim")
+#   ylim = get.cell.meta.data("ylim")
+#   sector.name = get.cell.meta.data("sector.index")
+#   circos.text(mean(xlim), ylim[1] + .1, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+#   circos.axis(h = "top", labels.cex = 0.5, major.tick.length = 0.2, sector.index = sector.name, track.index = 2)
+# }, bg.border = NA)
+# 
+# 
+# 
+# circos.clear()
+# 
+# 
+Viral_Abund_taxa  %>% 
+group_by(Species.type, Seq.type, Phylum) %>%
+reframe(DE = sum(TNA)) %>% 
+group_by(Species.type, Seq.type) %>%
+mutate(Percent = DE / sum(DE) * 100) %>%
+arrange(.by_group = TRUE, desc(Percent)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+
+# # Abundance of viral contigs
+Viral_Abund_taxa$Species.Seq <- paste(Viral_Abund_taxa$Species.type, Viral_Abund_taxa$Seq.type, sep="_")
+Viral_Abund_taxa %>%
+#mutate(Phylum = coalesce(Phylum, "Unclassified viruses"))  %>%
+group_by(Species.Seq, Phylum) %>%
+reframe(DE = sum(TNA)/10^5)  ->
+Vir2
+
+
+order = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "Cressdnaviricota", "Hofneiviricota", "Nucleocytoviricota", "Peploviricota", "Phixviricota", "Preplasmiviricota", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota", "Cossaviricota", "Unclassified Riboviria", "Unclassified viruses")
+
+
+order2= c("Cressdnaviricota", "Hofneiviricota", "Nucleocytoviricota", "Peploviricota", "Phixviricota", "Preplasmiviricota", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota", "Cossaviricota", "Unclassified Riboviria", "Unclassified viruses")
+
+                 
+order3 = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")
+
+grid.col =  c(`G. connexa_Metatranscriptome` = "#428953", `G. connexa_Metagenome` = "#5675D6", `E. pulchripes_Metatranscriptome` = "#428953",  `E. pulchripes_Metagenome` = "#5675D6", Cressdnaviricota = "#CE2929", Hofneiviricota = "#636363", Nucleocytoviricota = "#CC5F00FF", Peploviricota = "#FF00FF", Phixviricota = "#FF8B07", Preplasmiviricota = "#D0B100",  Uroviricota = "#0066FFFF", Duplornaviricota = "#CCFF00FF", Kitrinoviricota = "chartreuse3", Lenarviricota = "darkgoldenrod4", Negarnaviricota = "peachpuff3", Pisuviricota = "mediumorchid2", Cossaviricota ="#AE4371", `Unclassified Riboviria` = "#65ECEF", `Unclassified viruses` = "coral")
+
+
+
+grid.colour =  c(Cressdnaviricota = "#CE2929", Hofneiviricota = "#636363", Nucleocytoviricota = "#CC5F00FF", Peploviricota = "#FF00FF", Phixviricota = "#FF8B07", Preplasmiviricota = "#D0B100",  Uroviricota = "#0066FFFF", Duplornaviricota = "#CCFF00FF", Kitrinoviricota = "chartreuse3", Lenarviricota = "darkgoldenrod4", Negarnaviricota = "peachpuff3", Pisuviricota = "mediumorchid2", Cossaviricota ="#AE4371", `Unclassified Riboviria` = "#65ECEF", `Unclassified viruses` = "coral")
+
+grid.species <- c("G. connexa_Metatranscriptome" = "#428953", "G. connexa_Metagenome" = "#5675D6", "E. pulchripes_Metatranscriptome" = "#428953",  "E. pulchripes_Metagenome" = "#5675D6")
+
+  
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(Vir2, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(9))
+circos.info()
+# Metagenome
+highlight.sector(Vir2$Species.Seq[which(Vir2$Species.Seq == "G. connexa_Metagenome")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(Vir2$Species.Seq[which(Vir2$Species.Seq == "E. pulchripes_Metagenome")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE)
+# Metatranscriptome
+highlight.sector(Vir2$Species.Seq[which(Vir2$Species.Seq == "G. connexa_Metatranscriptome")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(Vir2$Species.Seq[which(Vir2$Species.Seq == "E. pulchripes_Metatranscriptome")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.1, 
+       legend = unique(order2), 
+        fill = grid.colour, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.01, 
+       legend = unique(order3), 
+       fill = grid.species, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species type", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+```
+
+
+
+**Full viral taxa**
+```{r full virus taxa data, cache = T}
+# NUmver of viral genomes
+Full_complete_taxa_seq %>%
+group_by(Species.type, Seq.type) %>%
+reframe(Counts = n()) ->
+  numb_viral
+
+# Number of virses in each phylum
+Full_complete_taxa_seq %>%
+group_by(Species.type, Seq.type, Phylum) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type, Seq.type) %>%
+mutate(percent = Counts/sum(Counts)*100) ->
+  numb_viral_phylum
+
+write.csv(numb_viral_phylum, "numb_viral_phylum.csv")
+
+# Number of quality genomes
+Full_complete_taxa_seq %>%
+group_by(Species.type, Seq.type, checkv_quality) %>%
+reframe(Counts = n()) ->
+  quality
+
+ggplot(quality, aes(x = Species.type, y = Counts, fill = checkv_quality)) + xlab("CAZymes with signal peptides in MG") + ylab("Counts") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="right") +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_brewer(palette = "Set2") +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+ggsave("EpiGlo_viral_genome_quality_MGMT.svg",width = 45, height = 35, units = "cm")
+
+
+
+######## Contig length
+Full_complete_taxa_seq %>%
+group_by(Species.type, Seq.type, checkv_quality, contig_length) %>%
+mutate(contig_length = contig_length/1000) %>%
+mutate(Number = n()) %>%
+ggplot(aes(x = Species.type, y = contig_length, fill = checkv_quality)) + xlab("Species") +  ylab("Viral contig length(kb)") +
+geom_bar(stat="identity", position=position_dodge()) + theme_bw() + 
+theme(axis.text=element_text(size=24, colour="black"), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) +
+#scale_y_continuous(label=scientific_10) +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_brewer(palette = "Set2") +
+theme(legend.position="right", strip.text.x = element_text(size=26)) + #scale_fill_brewer(palette = "Set2") +
+theme(legend.text = element_text(colour="black", size = 24), axis.text.x=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+
+ggsave("EpiGlo_viral_contig_length.svg",width = 45, height = 35, units = "cm")
+
+# Provirus
+
+Full_complete_taxa_seq %>%
+group_by(Species.type, Seq.type, checkv_quality, provirus) %>%
+mutate(Number = n()) %>%
+ggplot(aes(x = Species.type, y = Number, fill = provirus)) + xlab("Species") +  ylab("Number of provirus") +
+geom_bar(stat="identity", position=position_dodge()) + theme_bw() + 
+theme(axis.text=element_text(size=24, colour="black"), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) +
+#scale_y_continuous(label=scientific_10) +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_manual(values = pom9) +
+theme(legend.position="right", strip.text.x = element_text(size=26)) + #scale_fill_brewer(palette = "Set2") +
+theme(legend.text = element_text(colour="black", size = 24), axis.text.x=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+
+ggsave("EpiGlo_Number_Provirus.svg",width = 40, height = 35, units = "cm")
+
+
+# Total viruses: Metagenomes and metatraanscriptomes
+Full_complete_taxa_seq$Species.Seq <- paste(Full_complete_taxa_seq$Species.type, Full_complete_taxa_seq$Seq.type, sep="_")
+Full_complete_taxa_seq %>%
+#subset(Seq.type =="Metagenomes") %>%
+group_by(Species.Seq, Phylum) %>%
+mutate(Phylum = coalesce(Phylum, "Unclassified viruses"))  %>%
+reframe(Counts = n()) ->
+  mgmt1
+
+
+order= c("G. connexa_Metatranscriptomes", "G. connexa_Metagenomes", "E. pulchripes_Metatranscriptomes", "E. pulchripes_Metagenomes", "Cressdnaviricota", "Hofneiviricota", "Phixviricota", "Preplasmiviricota", "Cossaviricota", "Unclassified viruses", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota")
+order2= c("Cressdnaviricota", "Hofneiviricota", "Phixviricota", "Preplasmiviricota", "Cossaviricota", "Unclassified viruses", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota")
+
+order3 = c("G. connexa_Metatranscriptomes", "G. connexa_Metagenomes", "E. pulchripes_Metatranscriptomes", "E. pulchripes_Metagenomes")
+
+grid.col =  c("G. connexa_Metatranscriptomes" = "#428953", "G. connexa_Metagenomes" = "#5675D6", "E. pulchripes_Metatranscriptomes" = "#428953",  "E. pulchripes_Metagenomes" = "#5675D6",  "Cressdnaviricota" = "#CE2929", "Hofneiviricota" = "#636363", "Phixviricota" = "#FF8B07", "Preplasmiviricota" = "#D0B100", "Cossaviricota" ="#AE4371", "Unclassified viruses" = "coral", "Uroviricota" = "#0066FFFF", "Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Lenarviricota" = "darkgoldenrod4", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2")
+
+grid.colour =  c("Cressdnaviricota" = "#CE2929", "Hofneiviricota" = "#636363", "Phixviricota" = "#FF8B07", "Preplasmiviricota" = "#D0B100", "Cossaviricota" ="#AE4371", "Unclassified viruses" = "coral", "Uroviricota" = "#0066FFFF", "Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Lenarviricota" = "darkgoldenrod4", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2")
+
+grid.species <- c("G. connexa_Metatranscriptomes" = "#428953", "G. connexa_Metagenomes" = "#5675D6", "E. pulchripes_Metatranscriptomes" = "#428953",  "E. pulchripes_Metagenomes" = "#5675D6")
+
+  
+ set.seed(388000) 
+
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+chordDiagram(mgmt1, annotationTrack = "grid", order=order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(9))
+# chordDiagram(mgmt1,
+#              # manual order of sectors
+#             order = order,
+#             grid.col = grid.col,
+#             transparency = 0.8,
+#              # plot only grid (no labels, no axis)
+#              annotationTrack = "grid",
+#              preAllocateTracks = 1,
+# 
+#              # adjust grid width and spacing
+#              annotationTrackHeight = c(0.08, 0.05),
+# 
+#              # add directionality
+#              directional=1,
+#              direction.type = c("diffHeight", "arrows"),
+#              link.arr.type = "big.arrow",
+# 
+#              # adjust the starting end of the link
+#              diffHeight = -uh(1, "mm"),
+# 
+#              # adjust height of all links
+#              h.ratio = 0.8,
+# 
+#              # add link border
+#              link.lwd = 1, link.lty = 1, link.border="gray35"
+# 
+#              )
+# add additional track to enhance the visual effect of different groups
+# Metagenome
+highlight.sector(mgmt1$Species.Seq[which(mgmt1$Species.Seq == "G. connexa_Metagenomes")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(mgmt1$Species.Seq[which(mgmt1$Species.Seq == "E. pulchripes_Metagenomes")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE)
+# Metatranscriptome
+highlight.sector(mgmt1$Species.Seq[which(mgmt1$Species.Seq == "G. connexa_Metatranscriptomes")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(mgmt1$Species.Seq[which(mgmt1$Species.Seq == "E. pulchripes_Metatranscriptomes")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.1, 
+       legend = unique(order2), 
+        fill = grid.colour, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.01, 
+       legend = unique(order3), 
+       fill = grid.species, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species type", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+
+
+
+
+
+
+
+
+############################## Abundance
+Full_complete_taxa_seq %>%
+mutate(Phylum = coalesce(Phylum, "Unclassified viruses"))  %>%
+group_by(Species.type, Seq.type, Phylum) %>%
+reframe(DE = sum(TPM)) %>%
+group_by(Species.type, Seq.type) %>%
+mutate(percent = DE/sum(DE)*100) ->
+viral_abundance
+
+write.csv(viral_abundance, "viral_abundance.csv")
+
+
+
+
+# Total viruses: Metagenomes and metatraanscriptomes
+Full_complete_taxa_seq$Species.Seq <- paste(Full_complete_taxa_seq$Species.type, Full_complete_taxa_seq$Seq.type, sep="_")
+Full_complete_taxa_seq %>%
+group_by(Species.Seq, Phylum) %>%
+mutate(Phylum = coalesce(Phylum, "Unclassified viruses"))  %>%
+reframe(DE = sum(TPM)/100000)  ->
+mgmt2
+
+#write.csv(mgmt2, "mgmt2.csv")
+# print(mgmt2, n =21)
+
+order= c("G. connexa_Metatranscriptomes", "G. connexa_Metagenomes", "E. pulchripes_Metatranscriptomes", "E. pulchripes_Metagenomes", "Cressdnaviricota", "Hofneiviricota", "Phixviricota", "Preplasmiviricota", "Cossaviricota", "Unclassified viruses", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota")
+
+order2= c("Cressdnaviricota", "Hofneiviricota", "Phixviricota", "Preplasmiviricota", "Cossaviricota", "Unclassified viruses", "Uroviricota", "Duplornaviricota", "Kitrinoviricota", "Lenarviricota", "Negarnaviricota", "Pisuviricota")
+
+order3 = c("G. connexa_Metatranscriptomes", "G. connexa_Metagenomes", "E. pulchripes_Metatranscriptomes", "E. pulchripes_Metagenomes")
+
+grid.col =  c("G. connexa_Metatranscriptomes" = "#428953", "G. connexa_Metagenomes" = "#5675D6", "E. pulchripes_Metatranscriptomes" = "#428953",  "E. pulchripes_Metagenomes" = "#5675D6",  "Cressdnaviricota" = "#CE2929", "Hofneiviricota" = "#636363", "Phixviricota" = "#FF8B07", "Preplasmiviricota" = "#D0B100", "Cossaviricota" ="#AE4371", "Unclassified viruses" = "coral", "Uroviricota" = "#0066FFFF", "Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Lenarviricota" = "darkgoldenrod4", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2")
+
+grid.colour =  c("Cressdnaviricota" = "#CE2929", "Hofneiviricota" = "#636363", "Phixviricota" = "#FF8B07", "Preplasmiviricota" = "#D0B100", "Cossaviricota" ="#AE4371", "Unclassified viruses" = "coral", "Uroviricota" = "#0066FFFF", "Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Lenarviricota" = "darkgoldenrod4", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2")
+
+grid.species <- c("G. connexa_Metatranscriptomes" = "#428953", "G. connexa_Metagenomes" = "#5675D6", "E. pulchripes_Metatranscriptomes" = "#428953",  "E. pulchripes_Metagenomes" = "#5675D6")
+
+  
+ set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+chordDiagram(mgmt2, annotationTrack = "grid", order=order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(9))
+# Metagenome
+highlight.sector(mgmt2$Species.Seq[which(mgmt2$Species.Seq == "G. connexa_Metagenomes")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(mgmt2$Species.Seq[which(mgmt2$Species.Seq == "E. pulchripes_Metagenomes")],
+                 track.index = 1, col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE)
+# Metatranscriptome
+highlight.sector(mgmt2$Species.Seq[which(mgmt2$Species.Seq == "G. connexa_Metatranscriptomes")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+highlight.sector(mgmt2$Species.Seq[which(mgmt2$Species.Seq == "E. pulchripes_Metatranscriptomes")],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.1, 
+       legend = unique(order2), 
+        fill = grid.colour, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.01, 
+       legend = unique(order3), 
+       fill = grid.species, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species type", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+
+```
+
+
+

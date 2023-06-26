@@ -1,0 +1,1008 @@
+---
+title: "Abundance of CRISPRCas loci in metagenome, MAGs and metatranscriptomes from the hinguts of E. pulhcripes and G. connexa"
+subtitle: "CRISPRCas in hinguts of E. pulhcripes and G. connexa"
+author: "Nweze Julius"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    code_folding: show
+    dev: png
+    df_print: kable
+    fig_caption: yes
+    highlight: pygments
+    keep_md: yes
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '5'
+link-citations: yes
+csl: fems-microbiology-ecology.csl
+subtitle: CRISPRCas
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries, include=F}
+# Load libraries
+#.libPaths(c('~/R/library', .libPaths())) # Uncomment if you have no write access to R path
+
+repo <- "http://cran.wu.ac.at"
+lib.loc <- Sys.getenv("R_LIBS_USER")
+
+update.packages(
+    lib.loc, 
+    repos = repo,
+    ask = FALSE
+)
+
+.cran_libs <- c(
+ "knitr", # A General-Purpose Package for Dynamic Report Generation in R
+ "kableExtra", # Construct Complex Table with 'kable' and Pipe Syntax
+#  "rmarkdown", # Dynamic Documents for R
+  "extrafont", # for extra figure fonts
+  "tidyverse", # for dplyr forcats ggplot2 readr tibble
+  "readODS", # #Read ODS Files
+ "grid", # The Grid Graphics Package
+#  "magrittr", # pipes
+  "scales", # Generic plot scaling methods
+  "svglite", # for svg files
+#  "vagen",
+"Polychrome",
+"ggtree",
+"gggenomes",
+"Cairo",
+"gggenes",
+"ComplexHeatmap",
+"circlize",
+ "RColorBrewer",
+ "car", # Companion to Applied Regression
+ "rcompanion", #Functions to Support Extension Education Program Evaluation
+ "multcomp", # Simultaneous Inference in General Parametric Models
+ "nlme", # Fit Linear Model Using Generalized Least Squares
+# "ggResidpanel", # Panels and Interactive Versions of Diagnostic Plots using
+ "emmeans", # Estimated Marginal Means, aka Least-Squares Means
+"performance" # Assessment of Regression Models Performance 
+) 
+
+.inst <- .cran_libs %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(.cran_libs[!.inst],
+                    repos = repo,
+                    lib = lib.loc)
+}
+
+.bioc_libs <- c(
+  #"multtest", #Resampling-based multiple hypothesis testing
+)
+
+.bioc_inst <- .bioc_libs %in% installed.packages()
+if (any(!.bioc_inst)) {
+   if (!requireNamespace("BiocManager", quietly = TRUE))
+   install.packages("BiocManager")
+   BiocManager::install(ask = F, lib = lib.loc)  # upgrade bioC packages
+   BiocManager::install(.bioc_libs[!.bioc_inst], ask = F, lib = lib.loc)
+}
+
+.local_libs <- c()
+
+.inst <- names(.local_libs) %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(paste0("~/R/", .local_libs[!.inst]) ,repos = NULL, type = "source", lib = lib.loc)
+}
+
+.github_libs <- c(
+  "wilkelab/ggtext", # Improved text rendering support for 'ggplot2' 
+  "ACCLAB/dabestr" # Data Analysis using Bootstrap-Coupled Estimation 
+)
+
+.github_lib_names <- stringr::str_replace(.github_libs, ".*/(.*)$", "\\1")
+
+.github_inst <- .github_lib_names %in% installed.packages()
+if (any(!.github_inst)) {
+  devtools::install_github(.github_libs[!.github_inst],
+                           lib = lib.loc,
+                           dependencies = TRUE)
+}
+
+# Load packages into session, and print package version
+(loaded.libs <- sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), require, character.only = TRUE))
+if (!all(loaded.libs)) {stop(paste("Package(s):", names(loaded.libs[loaded.libs == FALSE]), "could not be loaded"))}
+sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), packageVersion)
+```
+
+
+
+
+**Load CRISPRCas in the metagenome and metatranscriptomes**
+```{r load gggenomes, cache = T}
+# Load data
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "cas_operons1",  col_names = TRUE) ->
+cas_operons1
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "cas_operons2",  col_names = TRUE) ->
+cas_operons2
+
+# Colour codes
+grid.col = c(CRISPR_Cas = "#e00272ff", cas_operons_orphan = "#00FFFF", crisprs_orphan = "#D0B100")
+
+
+
+############################## Plot number of CRISPR_Cas, cas_operons, cas_operons_orphan
+cas_operons1 %>%
+filter(Type %in% c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan")) %>%
+mutate(Type = factor(Type, levels = c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan"))) %>%
+group_by(Species.type, Seq.type, Type) %>%
+reframe(Counts = n()) ->
+Cas_Total
+
+ggplot(Cas_Total, aes(x = Species.type, y = Counts, fill = Type)) + ylab("Number of CRISPR_Cas Systems") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="top") +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_manual(values = grid.col) +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+ggsave("EpiGlo_viral_cas_crispr_cas_MGMT.svg", width = 50, height = 50, units = "cm")
+
+
+
+############################## Plot number of CRISPR_Cas in Mg and MT from both species
+cas_operons1 %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Species.type, Seq.type, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type, Seq.type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+cas_operons1$Species_Seq <- paste(cas_operons1$Species.type, cas_operons1$Seq.type, sep="_")
+cas_operons1 %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Species_Seq, Prediction) %>%
+reframe(Counts = n()) ->
+Cas_Total_pred1
+
+order = c("G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "I-B", "I-C", "I-E", "I-F", "I-G", "II-A",  "II-C", "III-A", "III-B", "III-D", "IV-A2", "V-A", "V-F2", "VI-A", "VI-B1") 
+
+order1 = c("G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")                    
+
+order2 = c("I-B", "I-C", "I-E", "I-F", "I-G", "II-A",  "II-C", "III-A", "III-B", "III-D", "IV-A2", "V-A", "V-F2", "VI-A", "VI-B1")
+
+
+
+grid.col =  c(`G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A",   `E. pulchripes_Metagenome` = "#4682B4", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00",  `II-C` = "#FF00FF", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `V-A2` = "#00FFFF", `V-A` = "#0000FF", `V-F2` = "#CD5C5C", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+  
+grid.col.cas =  c(`G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A",   `E. pulchripes_Metagenome` = "#4682B4")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00",  `II-C` = "#FF00FF", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `V-A2` = "#00FFFF", `V-A` = "#0000FF", `V-F2` = "#CD5C5C", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(Cas_Total_pred1, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# G. connexa
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("G. connexa_Metagenome"))],
+                 track.index = 1,  col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "G. connexa", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+# E. pulchripes
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome"))],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "E. pulchripes", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "CRISPR_Cas subtype", title.adj = 0.1) 
+
+
+legend(x = 0.8, y = -0.5, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Species.Seq.Type", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+
+
+
+ 
+############################## Plot number of cas_operons_orphan in Mg and MT from both species
+cas_operons1 %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Species.type, Seq.type, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type, Seq.type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+cas_operons1$Species_Seq <- paste(cas_operons1$Species.type, cas_operons1$Seq.type, sep="_")
+cas_operons1 %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Species_Seq, Prediction) %>%
+reframe(Counts = n()) ->
+Cas_Total_pred3
+
+order = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "I-B", "I-C", "I-E", "I-F", "I-G", "II-A",  "II-C", "II-C2", "II-D", "III-A", "III-B", "III-D", "IV-B", "V-A", "V-F2", "VI-A", "VI-B1") 
+
+
+order1 = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")                              
+
+order2 = c("I-B", "I-C", "I-E", "I-F", "I-G", "II-A",  "II-C", "II-C2", "II-D", "III-A", "III-B", "III-D", "IV-B", "V-A", "V-F2", "VI-A", "VI-B1")
+
+grid.col =  c(`G. connexa_Metatranscriptome` = "#800080", `G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A", `E. pulchripes_Metagenome` = "#4682B4", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00",  `II-C` = "#FF00FF", `II-C2` = "#8B4513", `II-D` = "#000000", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `IV-B` = "darkgoldenrod4", `V-A2` = "#00FFFF", `V-A` = "#0000FF", `V-F2` = "#CD5C5C", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+  
+grid.col.cas =  c(`G. connexa_Metatranscriptome` = "#800080", `G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A", `E. pulchripes_Metagenome` = "#4682B4")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00",  `II-C` = "#FF00FF", `II-C2` = "#8B4513", `II-D` = "#000000", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `IV-B` = "darkgoldenrod4", `V-A2` = "#00FFFF", `V-A` = "#0000FF", `V-F2` = "#CD5C5C", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(Cas_Total_pred3, annotationTrack = "grid", order=order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+# G. connexa
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("G. connexa_Metagenome"))],
+                 track.index = 1,  col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "G. connexa", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+# E. pulchripes
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome"))],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "E. pulchripes", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "cas_operons_orphan", title.adj = 0.1) 
+
+
+legend(x = 0.8, y = -0.5, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Species.Seq.Type", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()
+
+
+
+
+
+
+
+
+
+
+
+
+############################## Plot number of crisprs_orphan in Mg and MT from both species
+cas_operons1 %>%
+subset(Type == "crisprs_orphan") %>%
+group_by(Species.type, Seq.type, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type, Seq.type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+cas_operons1 %>%
+subset(Type == "crisprs_orphan") %>%
+group_by(Species.type, Seq.type, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Species.type, Seq.type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+cas_operons1$Species_Seq <- paste(cas_operons1$Species.type, cas_operons1$Seq.type, sep="_")
+cas_operons1 %>%
+subset(Type == "crisprs_orphan") %>%
+group_by(Species_Seq, Prediction) %>%
+reframe(Counts = n()) ->
+Cas_Total_pred6
+
+order = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "I-A", "I-B", "I-C", "I-D", "I-E", "I-F", "I-G", "II-A", "II-B", "II-C", "II-C2", "II-D", "III-A", "III-B", "III-D", "IV-A1", "IV-A2", "IV-A3", "IV-B", "IV-D", "V-A", "V-B1", "V-F1", "V-F2", "V-G","V-J", "V-K", "VI-A", "VI-B1", "VI-B2", "VI-D", "V-I") 
+
+order1 = c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")                              
+
+order2 = c("I-A", "I-B", "I-C", "I-D", "I-E", "I-F", "I-G", "II-A", "II-B", "II-C", "II-C2", "II-D", "III-A", "III-B", "III-D", "IV-A1", "IV-A2", "IV-A3", "IV-B", "IV-D", "V-A", "V-B1", "V-F1", "V-F2", "V-G","V-J", "V-K", "VI-A", "VI-B1", "VI-B2", "VI-D", "V-I")
+
+
+grid.col =  c(`G. connexa_Metatranscriptome` = "#800080", `G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A", `E. pulchripes_Metagenome` = "#4682B4", `I-A` = "#E9700A", `I-B` = "#000080", `I-C` = "#006400", `I-D` = "#00FF80", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-B` = "#87CEFA", `II-C` = "#FF00FF", `II-C2` = "#8B4513", `II-D` = "#000000", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `IV-A1` = "#B22222", `IV-A2` = "#6B8E23", `IV-A3` = "#ADFF2F", `IV-B` = "darkgoldenrod4", `IV-D` = "#8FBC8F", `V-A` = "#0000FF", `V-B1` = "#2F4F4F", `V-F1` = "#4682B4", `V-F2` = "#CD5C5C", `V-G` = "#FF6666", `V-J` = "#FFCC99", `V-K` = "#87CEFA", `VI-A` = "coral", `VI-B1` = "#BDB76B", `VI-B2` = "#228B22", `VI-D` = "#4169E1", `V-I` = "#8A2BE2")
+
+
+grid.col.cas =  c(`G. connexa_Metatranscriptome` = "#800080", `G. connexa_Metagenome` = "#FF0000", `E. pulchripes_Metatranscriptome` = "#E9967A", `E. pulchripes_Metagenome` = "#4682B4")
+
+
+grid.col.type =  c(`I-A` = "#E9700A", `I-B` = "#000080", `I-C` = "#006400", `I-D` = "#00FF80", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-B` = "#87CEFA", `II-C` = "#FF00FF", `II-C2` = "#8B4513", `II-D` = "#000000", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `IV-A1` = "#B22222", `IV-A2` = "#6B8E23", `IV-A3` = "#ADFF2F", `IV-B` = "darkgoldenrod4", `IV-D` = "#8FBC8F", `V-A` = "#0000FF", `V-B1` = "#2F4F4F", `V-F1` = "#4682B4", `V-F2` = "#CD5C5C", `V-G` = "#FF6666", `V-J` = "#FFCC99", `V-K` = "#87CEFA", `VI-A` = "coral", `VI-B1` = "#BDB76B", `VI-B2` = "#228B22", `VI-D` = "#4169E1", `V-I` = "#8A2BE2")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(Cas_Total_pred6, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+# G. connexa
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("G. connexa_Metagenome"))],
+                 track.index = 1,  col = "#AE4371", padding = c(-.2, 0, -.3, 0),
+                 text = "G. connexa", cex = 1.2, text.col = "black", niceFacing = TRUE)
+
+# E. pulchripes
+highlight.sector(Cas_Total_pred1$Species_Seq[which(Cas_Total_pred1$Species_Seq == c("E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome"))],
+                 track.index = 1, col = "#009999", padding = c(-.2, 0, -.3, 0),
+                 text = "E. pulchripes", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.2,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "crisprs_orphan", title.adj = 0.1) 
+
+
+legend(x = 0.8, y = -0.5, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Species.Seq.Type", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()
+
+
+```
+
+
+
+
+**Load CRISPRCas in the MAGs**
+```{r load gggenomes, cache = T}
+# Load data
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "MAGs",  col_names = TRUE) ->
+MAGs
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "MAG_Labels",  col_names = TRUE) ->
+MAG_Labels
+
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Phylum_Prokaryotes",  col_names = TRUE) ->
+Phylum_Prokaryotes
+
+# Merge
+Labels <- MAGs %>% right_join(MAG_Labels, by=c("Contig"), multiple = "all", relationship = "many-to-many")  %>% drop_na()
+
+# Merge
+Label_phyla <- Labels %>% right_join(Phylum_Prokaryotes, by=c("MAGs"), multiple = "all", relationship = "many-to-many")  %>% drop_na()
+
+#  Save
+write.csv(Label_phyla, "EpiGlo_CRISPR-Cas_phylal_Origins.csv")
+
+
+#Colour codes
+grid.col = c(CRISPR_Cas = "#e00272ff", cas_operons = "#39e789ff", cas_operons_orphan = "#00FFFF", crisprs = "#FF8B07", crisprs_near_cas = "#5675D6", crisprs_orphan = "#D0B100")
+
+
+
+############################## Plot number of CRISPR_Cas, cas_operons, cas_operons_orphan
+phylum.colors <- c(Actinobacteriota = "#4682B4", Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Verrucomicrobiota  = "#65ECEF", Elusimicrobiota  = "#808080", Deferribacterota  = "#800000", Bdellovibrionota  = "#0000FF", Cyanobacteria  = "#D0B100", Myxococcota = "#800080",  Spirochaetota  = "#FFFF00", Synergistota  = "#F5DEB3", Patescibacteria = "#000080")
+```
+
+
+**Plot CRISPRCas from the MAGs**
+```{r load gggenomes, cache = T}
+## Epibolus
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+filter(Type %in% c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan")) %>%
+mutate(Type = factor(Type, levels = c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan"))) %>%
+group_by(Type, Phylum) %>%
+reframe(Counts = n()) %>%
+group_by(Type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+filter(Type %in% c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan")) %>%
+mutate(Type = factor(Type, levels = c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan"))) %>%
+group_by(Type, Phylum) %>%
+reframe(Counts = n()) ->
+Cas_Total1
+
+
+ggplot(Cas_Total1, aes(y = Type, x = Counts, fill = Phylum)) + xlab("Number of CRISPR_Cas Systems") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="top") +
+scale_fill_manual(values = phylum.colors) +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24))
+
+ggsave("Epi_MAG_CRISPR_CAS_Systems.pdf")
+
+
+
+## Glomeris
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+filter(Type %in% c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan")) %>%
+mutate(Type = factor(Type, levels = c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan"))) %>%
+group_by(Type, Phylum) %>%
+reframe(Counts = n()) %>%
+group_by(Type) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+filter(Type %in% c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan")) %>%
+mutate(Type = factor(Type, levels = c("CRISPR_Cas", "cas_operons_orphan", "crisprs_orphan"))) %>%
+group_by(Type, Phylum) %>%
+reframe(Counts = n()) ->
+Cas_Total2
+
+
+ggplot(Cas_Total2, aes(y = Type, x = Counts, fill = Phylum)) + xlab("Number of CRISPR_Cas Systems") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="top") +
+scale_fill_manual(values = phylum.colors) +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+ggsave("Glo_MAG_CRISPR_CAS_Systems.pdf")
+
+
+
+
+
+############################## Plot number of CRISPR_Cas in MAGs from Epibolus
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Prediction) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred1
+
+order = c("Actinobacteriota", "Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Verrucomicrobiota", "Spirochaetota", "Synergistota", "I-B",  "I-C", "I-E", "I-F", "I-G", "II-A", "II-C", "III-A", "III-B", "III-D", "V-A", "V-F2", "VI-A") 
+
+
+order1 = c("Actinobacteriota", "Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Verrucomicrobiota", "Spirochaetota", "Synergistota")                              
+
+order2 = c("I-B",  "I-C", "I-E", "I-F", "I-G", "II-A", "II-C", "III-A", "III-B", "III-D", "V-A", "V-F2", "VI-A")
+
+
+grid.col =  c(Actinobacteriota  = "#4682B4", Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Verrucomicrobiota  = "#65ECEF", Spirochaetota  = "#FFFF00", Synergistota  = "#F5DEB3", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-C` = "#FF00FF", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `V-A` = "#0000FF",  `V-F2` = "#CD5C5C",  `VI-A` = "coral")
+
+
+grid.col.cas =  c(Actinobacteriota  = "#4682B4", Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Verrucomicrobiota  = "#65ECEF", Spirochaetota  = "#FFFF00", Synergistota  = "#F5DEB3")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-C` = "#FF00FF", `III-A` = "#F5DEB3", `III-B` = "#D0B100", `III-D` = "#A0522D", `V-A` = "#0000FF",  `V-F2` = "#CD5C5C",  `VI-A` = "coral")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred1, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+############################## Plot number of cas_operons_orphan in MAGs from Epibolus
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) %>%
+group_by(Prediction) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred2
+
+order = c("Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Bdellovibrionota", "Verrucomicrobiota", "I-B",  "I-C", "I-E", "I-F", "II-A", "II-C2", "II-D", "IV-B", "V-A", "VI-A") 
+                            
+order1 = c("Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Bdellovibrionota", "Verrucomicrobiota")                              
+
+order2 = c("I-B",  "I-C", "I-E", "I-F", "II-A", "II-C2", "II-D", "IV-B", "V-A", "VI-A")
+
+
+grid.col =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Bdellovibrionota  = "#0000FF", Verrucomicrobiota  = "#65ECEF", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `II-A` = "#00FF00",`II-C2` = "#8B4513", `II-D` = "#000000", `IV-B` = "darkgoldenrod4",  `V-A` = "#0000FF", `VI-A` = "coral")
+
+
+grid.col.cas =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Bdellovibrionota  = "#0000FF", Verrucomicrobiota  = "#65ECEF")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `II-A` = "#00FF00",`II-C2` = "#8B4513", `II-D` = "#000000", `IV-B` = "darkgoldenrod4",  `V-A` = "#0000FF", `VI-A` = "coral")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred2, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+############################## Plot number of crisprs_orphan in MAGs from Epibolus
+Label_phyla %>%
+subset(Epibolus == "Yes") %>%
+subset(Type == "crisprs_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred3
+
+order = c("Actinobacteriota", "Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Verrucomicrobiota", "Myxococcota", "Spirochaetota", "Synergistota", "I-A", "I-B",  "I-C", "I-E", "I-F", "I-G", "II-A", "II-B", "II-C", "III-B", "III-C", "III-D", "IV-A2", "V-F2", "V-J", "VI-A", "VI-B1") 
+
+order1 = c("Actinobacteriota", "Bacillota", "Pseudomonadota", "Desulfobacterota", "Planctomycetota", "Bacteroidota", "Verrucomicrobiota", "Myxococcota", "Spirochaetota", "Synergistota")                              
+order2 = c("I-A", "I-B",  "I-C", "I-E", "I-F", "I-G", "II-A", "II-B", "II-C", "III-B", "III-C", "III-D", "IV-A2", "V-F2", "V-J", "VI-A", "VI-B1")
+
+
+grid.col =  c(Actinobacteriota  = "#4682B4", Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Verrucomicrobiota  = "#65ECEF", Myxococcota = "#800080", Spirochaetota  = "#FFFF00", Synergistota  = "#F5DEB3", `I-A` = "#E9700A", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-B` = "#87CEFA", `II-C` = "#FF00FF", `III-B` = "#D0B100", `III-C` = "#FFFF00",  `III-D` = "#A0522D", `IV-A2` = "#6B8E23", `V-F2` = "#CD5C5C", `V-J` = "#FFCC99", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+
+
+
+grid.col.cas =  c(Actinobacteriota  = "#4682B4", Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Desulfobacterota  = "#FF00FF", Planctomycetota  = "chartreuse3", Bacteroidota  = "#CE2929", Verrucomicrobiota  = "#65ECEF", Myxococcota = "#800080", Spirochaetota  = "#FFFF00", Synergistota  = "#F5DEB3")
+
+
+grid.col.type =  c(`I-A` = "#E9700A", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `I-F` ="#800000", `I-G` = "#808000", `II-A` = "#00FF00", `II-B` = "#87CEFA", `II-C` = "#FF00FF", `III-B` = "#D0B100", `III-C` = "#FFFF00",  `III-D` = "#A0522D", `IV-A2` = "#6B8E23", `V-F2` = "#CD5C5C", `V-J` = "#FFCC99", `VI-A` = "coral", `VI-B1` = "#BDB76B")
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred3, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+
+
+
+############################## Plot number of CRISPR_Cas in MAGs from Glomeris
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n())  %>%
+group_by(Prediction) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+subset(Type == "CRISPR_Cas") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred4
+
+order = c("Bacillota", "Pseudomonadota", "Bacteroidota", "I-C", "II-C", "III-A", "VI-B1") 
+
+
+
+order1 = c("Bacillota", "Pseudomonadota", "Bacteroidota")                              
+
+order2 = c("I-C", "II-C", "III-A", "VI-B1")
+
+
+grid.col =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Bacteroidota  = "#CE2929", `I-C` = "#006400", `II-C` = "#FF00FF", `III-A` = "#F5DEB3", `VI-B1` = "#BDB76B")
+
+
+grid.col.cas =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Bacteroidota  = "#CE2929")
+
+
+grid.col.type =  c(`II-C` = "#FF00FF", `III-A` = "#F5DEB3", `VI-B1` = "#BDB76B")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred4, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+
+############################## Plot number of cas_operons_orphan in MAGs from Glomeris
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n())  %>%
+group_by(Prediction) %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+subset(Type == "cas_operons_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred5
+
+order = c("Bacillota", "Pseudomonadota", "I-B",  "I-F", "II-A") 
+
+
+order1 = c("Bacillota", "Pseudomonadota")                              
+
+order2 = c("I-B",  "I-F", "II-A")
+
+
+grid.col =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", `I-B` = "#000080", `I-F` ="#800000", `II-A` = "#00FF00")
+
+
+grid.col.cas =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-F` ="#800000", `II-A` = "#00FF00")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred5, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+############################## Plot number of crisprs_orphan in MAGs from Glomeris
+Label_phyla %>%
+subset(Glomeris == "Yes") %>%
+subset(Type == "crisprs_orphan") %>%
+group_by(Phylum, Prediction) %>%
+reframe(Counts = n()) ->
+MAGs_pred6
+
+order = c("Bacillota", "Pseudomonadota", "Bacteroidota", "I-B",  "I-C", "I-E", "II-A", "II-C", "III-B",  "III-D", "V-F1") 
+                       
+order1 = c("Bacillota", "Pseudomonadota", "Bacteroidota") 
+
+order2 = c("I-B",  "I-C", "I-E", "II-A", "II-C", "III-B",  "III-D", "V-F1")
+
+
+grid.col =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Bacteroidota  = "#CE2929", `I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `II-A` = "#00FF00", `II-C` = "#FF00FF", `III-B` = "#D0B100",  `III-D` = "#A0522D", `V-F1` = "#4682B4")
+
+
+grid.col.cas =  c(Bacillota  = "#FF8B07", Pseudomonadota  = "darkgoldenrod4", Bacteroidota  = "#CE2929")
+
+
+grid.col.type =  c(`I-B` = "#000080", `I-C` = "#006400", `I-E` = "#808080", `II-A` = "#00FF00", `II-C` = "#FF00FF", `III-B` = "#D0B100",  `III-D` = "#A0522D", `V-F1` = "#4682B4")
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 0.8, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MAGs_pred6, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1.2, major.tick.length = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+legend(x = 0.9, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col.type, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Subtype", title.adj = 0.1) 
+
+
+legend(x = 0.9, y = -0.1, 
+       legend = unique(order1), 
+        fill = grid.col.cas, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+```

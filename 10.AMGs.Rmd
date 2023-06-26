@@ -1,0 +1,860 @@
+---
+title: "Auxilaray metabolic genes (AMGs) in the single-viral genomes"
+subtitle: "Predicted AMGs"
+author: "Nweze Julius"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    code_folding: show
+    dev: png
+    df_print: kable
+    fig_caption: yes
+    highlight: pygments
+    keep_md: yes
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '5'
+link-citations: yes
+csl: fems-microbiology-ecology.csl
+subtitle: auxilary metabolic genes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries, include=F}
+# Load libraries
+#.libPaths(c('~/R/library', .libPaths())) # Uncomment if you have no write access to R path
+
+repo <- "http://cran.wu.ac.at"
+lib.loc <- Sys.getenv("R_LIBS_USER")
+
+update.packages(
+    lib.loc, 
+    repos = repo,
+    ask = FALSE
+)
+
+.cran_libs <- c(
+ "knitr", # A General-Purpose Package for Dynamic Report Generation in R
+ "kableExtra", # Construct Complex Table with 'kable' and Pipe Syntax
+#  "rmarkdown", # Dynamic Documents for R
+  "extrafont", # for extra figure fonts
+  "tidyverse", # for dplyr forcats ggplot2 readr tibble
+  "readODS", # #Read ODS Files
+ "grid", # The Grid Graphics Package
+#  "magrittr", # pipes
+  "scales", # Generic plot scaling methods
+  "svglite", # for svg files
+#  "vagen",
+"Polychrome",
+"ggtree",
+"gggenomes",
+"Cairo",
+"gggenes",
+"ComplexHeatmap",
+"circlize",
+ "RColorBrewer",
+ "car", # Companion to Applied Regression
+ "rcompanion", #Functions to Support Extension Education Program Evaluation
+ "multcomp", # Simultaneous Inference in General Parametric Models
+ "nlme", # Fit Linear Model Using Generalized Least Squares
+# "ggResidpanel", # Panels and Interactive Versions of Diagnostic Plots using
+ "emmeans", # Estimated Marginal Means, aka Least-Squares Means
+"performance" # Assessment of Regression Models Performance 
+) 
+
+.inst <- .cran_libs %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(.cran_libs[!.inst],
+                    repos = repo,
+                    lib = lib.loc)
+}
+
+.bioc_libs <- c(
+  #"multtest", #Resampling-based multiple hypothesis testing
+)
+
+.bioc_inst <- .bioc_libs %in% installed.packages()
+if (any(!.bioc_inst)) {
+   if (!requireNamespace("BiocManager", quietly = TRUE))
+   install.packages("BiocManager")
+   BiocManager::install(ask = F, lib = lib.loc)  # upgrade bioC packages
+   BiocManager::install(.bioc_libs[!.bioc_inst], ask = F, lib = lib.loc)
+}
+
+.local_libs <- c()
+
+.inst <- names(.local_libs) %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(paste0("~/R/", .local_libs[!.inst]) ,repos = NULL, type = "source", lib = lib.loc)
+}
+
+.github_libs <- c(
+  "wilkelab/ggtext", # Improved text rendering support for 'ggplot2' 
+  "ACCLAB/dabestr" # Data Analysis using Bootstrap-Coupled Estimation 
+)
+
+.github_lib_names <- stringr::str_replace(.github_libs, ".*/(.*)$", "\\1")
+
+.github_inst <- .github_lib_names %in% installed.packages()
+if (any(!.github_inst)) {
+  devtools::install_github(.github_libs[!.github_inst],
+                           lib = lib.loc,
+                           dependencies = TRUE)
+}
+
+# Load packages into session, and print package version
+(loaded.libs <- sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), require, character.only = TRUE))
+if (!all(loaded.libs)) {stop(paste("Package(s):", names(loaded.libs[loaded.libs == FALSE]), "could not be loaded"))}
+sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), packageVersion)
+```
+
+
+
+# **AMGs**
+```{r load AMGs, cache = T}
+# Load AMG data
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "AMG_Phylum",  col_names = TRUE) ->
+AMG_Phylum
+
+
+# read_ods("Host_prediction_to_genus_m90.ods", sheet = "Pathways",  col_names = TRUE) ->
+# Pathways
+# 
+# AMGs_Pathways <-  Pathways %>% right_join(AMG_Phylum , by=c("AMG KO"), multiple = "all", relationship = "many-to-many") #%>% drop_na(b_Phylum)
+# 
+# write.csv(AMGs_Pathways, "AMGs_Pathways.ods")
+
+```
+
+
+
+**Plot AMGs for E. pulchripes**
+```{r plot AMGs, cache = T}
+############## AMGs_Pathways: Epibolus
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "E. pulchripes" & Seq.type == "Metagenome") ->
+NO1
+
+length(unique(NO1$Contigs))
+
+
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "E. pulchripes" & Seq.type == "Metagenome") %>%
+#subset(Seq.type == "Metagenome") %>% 
+group_by(Pathway, `AMG KO name`) %>%
+reframe(Counts = n()) %>%
+subset(select = c("Pathway", "AMG KO name", "Counts"))->
+AP1
+
+
+
+AP1 %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)  
+
+order = c("Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "DNMT3A", "acpH", "dcm", "glmS", "gpmB", "metK", "mtnN", "purA", "speG", "UDP", "acpP", "bacC", "glk", "aldO", "ascC", "fcl", "galC", "gloA", "gmd", "pdhC", "pgl", "plc", "cysH", "mfnC", "norB", "mec", "moeB", "thiF", "gmhB", "pld", "ahbD", "bchE", "coaX","cobS", "cobT", "folA", "folE", "nadE", "nadV", "panC", "phoA", "pncA", "queC", "queE", "ubiG", "phnP", "rutB", "fpr")
+
+order1 = c("Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance")
+
+
+grid.col =  c("Amino acid metabolism" = "#00FFFF", "Biosynthesis of other secondary metabolites" = "#e00272ff", "Carbohydrate metabolism" = "#008080", "Energy metabolism" = "#FAF0E6", "Sulfur relay system" = "#FF6347", "Glycan biosynthesis and metabolism" = "#5675D6", "Lipid metabolism" = "#FF8B07", "Metabolism of cofactors and vitamins" = "#D0B100", "Metabolism of terpenoids and polyketides" = "#AE4371", "Nucleotide metabolism" = "#FF00FF", "Unclassified metabolism" =  "#00FF00", "Xenobiotics biodegradation and metabolism" =  "#FFFF00", "Antibiotic resistance" = "#800000", "DNMT3A"=  "darkgoldenrod4", "acpH"=  "darkgoldenrod4", "dcm"=  "darkgoldenrod4", "glmS"=  "darkgoldenrod4", "gpmB"=  "darkgoldenrod4", "metK"=  "darkgoldenrod4", "mtnN"=  "darkgoldenrod4", "purA"=  "darkgoldenrod4", "speG"=  "darkgoldenrod4", "UDP"=  "darkgoldenrod4", "acpP"=  "darkgoldenrod4", "bacC" = "darkgoldenrod4", "glk"=  "darkgoldenrod4", "aldO"=  "darkgoldenrod4", "ascC"=  "darkgoldenrod4", "fcl"=  "darkgoldenrod4", "galC" =  "darkgoldenrod4", "gloA" =  "darkgoldenrod4", "gmd" =  "darkgoldenrod4", "pdhC" =  "darkgoldenrod4", "pgl" = "darkgoldenrod4", "plc" =  "darkgoldenrod4", "cysH" =  "darkgoldenrod4", "mfnC" =  "darkgoldenrod4", "norB" =  "darkgoldenrod4", "mec" =  "darkgoldenrod4", "moeB" =  "darkgoldenrod4", "thiF" =  "darkgoldenrod4", "gmhB" =  "darkgoldenrod4", "pld" =  "darkgoldenrod4", "ahbD" =  "darkgoldenrod4", "bchE" =  "darkgoldenrod4", "coaX" =  "darkgoldenrod4","cobS" =  "darkgoldenrod4", "cobT" =  "darkgoldenrod4", "folA" =  "darkgoldenrod4", "folE" =  "darkgoldenrod4", "nadE" =  "darkgoldenrod4", "nadV" =  "darkgoldenrod4", "panC" =  "darkgoldenrod4", "phoA" =  "darkgoldenrod4", "pncA" =  "darkgoldenrod4", "queC" =  "darkgoldenrod4", "queE" =  "darkgoldenrod4", "ubiG" =  "darkgoldenrod4", "phnP" =  "darkgoldenrod4", "rutB" =  "darkgoldenrod4", "fpr" =  "darkgoldenrod4")
+  
+  
+
+
+
+
+
+grid.col.pathways =  c("Amino acid metabolism" = "#00FFFF", "Biosynthesis of other secondary metabolites" = "#e00272ff", "Carbohydrate metabolism" = "#008080", "Energy metabolism" = "#FAF0E6", "Sulfur relay system" = "#FF6347", "Glycan biosynthesis and metabolism" = "#5675D6", "Lipid metabolism" = "#FF8B07", "Metabolism of cofactors and vitamins" = "#D0B100", "Metabolism of terpenoids and polyketides" = "#AE4371", "Nucleotide metabolism" = "#FF00FF", "Unclassified metabolism" =  "#00FF00", "Xenobiotics biodegradation and metabolism" =  "#FFFF00", "Antibiotic resistance" = "#800000")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(AP1, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+  circos.text(mean(xlim), ylim[1] + .3, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.length = 0.6, sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order1), 
+        fill = grid.col.pathways, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Pathway", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+
+# Metatranscriptomes
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "E. pulchripes" & Seq.type == "Metatranscriptome") ->
+NO2
+
+length(unique(NO2$Contigs))
+
+
+
+
+
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "E. pulchripes" & Seq.type == "Metatranscriptome") %>%
+#subset(Seq.type == "Metagenome") %>% 
+group_by(Pathway, `AMG KO name`) %>%
+reframe(Counts = n()) %>%
+subset(select = c("Pathway", "AMG KO name", "Counts"))->
+AP2
+
+
+AP2 %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+order = c("Amino acid metabolism", "Sulfur relay system", "DNMT3A", "mec")
+
+
+
+order1 = c("Amino acid metabolism", "Sulfur relay system")
+
+
+grid.col =  c("Amino acid metabolism" = "#00FFFF", "Sulfur relay system" = "#FF6347", "DNMT3A"=  "darkgoldenrod4", "mec" =  "darkgoldenrod4")
+  
+  
+grid.col.pathways =  c("Amino acid metabolism" = "#00FFFF", "Sulfur relay system" = "#FF6347")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(AP2, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+  circos.text(mean(xlim), ylim[1] + .3, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.length = 0.6, sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order1), 
+        fill = grid.col.pathways, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Pathway", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+```
+
+
+
+
+**Plot AMGs for G. connexa**
+```{r plot AMGs, cache = T}
+############## AMGs_Pathways: Epibolus
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "G. connexa" & Seq.type == "Metagenome") ->
+NO3
+
+length(unique(NO3$Contigs))
+
+
+
+
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "G. connexa" & Seq.type == "Metagenome") %>%
+#subset(Seq.type == "Metagenome") %>% 
+group_by(Pathway, `AMG KO name`) %>%
+reframe(Counts = n()) %>%
+subset(select = c("Pathway", "AMG KO name", "Counts"))->
+AP3
+
+AP3 %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+order = c("Amino acid metabolism", "Carbohydrate metabolism", "Energy metabolism", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "DNMT3A", "purA", "speE", "korD", "cysH", "vanY", "fabG", "cobS", "phnP")
+
+
+order1 = c("Amino acid metabolism", "Carbohydrate metabolism", "Energy metabolism", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins")
+
+
+grid.col =  c("Amino acid metabolism" = "#00FFFF", "Carbohydrate metabolism" = "#008080", "Energy metabolism" = "#FAF0E6", "Glycan biosynthesis and metabolism" = "#5675D6", "Lipid metabolism" = "#FF8B07", "Metabolism of cofactors and vitamins" = "#D0B100", "DNMT3A"=  "darkgoldenrod4", "purA"=  "darkgoldenrod4", "speE"=  "darkgoldenrod4", "korD"=  "darkgoldenrod4", "cysH" =  "darkgoldenrod4", "vanY" =  "darkgoldenrod4", "NEU1" =  "darkgoldenrod4", "fabG" =  "darkgoldenrod4", "cobS" =  "darkgoldenrod4", "folA" =  "darkgoldenrod4", "phnP" =  "darkgoldenrod4")
+  
+  
+grid.col.pathways =  c("Amino acid metabolism" = "#00FFFF", "Carbohydrate metabolism" = "#008080", "Energy metabolism" = "#FAF0E6", "Glycan biosynthesis and metabolism" = "#5675D6", "Lipid metabolism" = "#FF8B07", "Metabolism of cofactors and vitamins" = "#D0B100")
+
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(AP3, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+  circos.text(mean(xlim), ylim[1] + .3, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.length = 0.6, sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order1), 
+        fill = grid.col.pathways, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Pathway", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+
+
+
+
+
+
+
+# Metatranscriptomes
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "G. connexa" & Seq.type == "Metatranscriptome") ->
+NO4
+
+length(unique(NO4$Contigs))
+
+
+
+AMG_Phylum %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "G. connexa" & Seq.type == "Metatranscriptome") %>%
+group_by(Pathway, `AMG KO name`) %>%
+reframe(Counts = n()) %>%
+subset(select = c("Pathway", "AMG KO name", "Counts"))->
+AP4
+
+AP4 %>%
+arrange(.by_group = TRUE, desc(Counts)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+order = c("Amino acid metabolism", "Sulfur relay system", "Metabolism of cofactors and vitamins", "dcm", "mec", "cobS", "cobT")
+
+order1 = c("Amino acid metabolism", "Sulfur relay system", "Metabolism of cofactors and vitamins")
+
+
+grid.col =  c("Amino acid metabolism" = "#00FFFF", "Sulfur relay system" = "#FF6347", "Metabolism of cofactors and vitamins" = "#D0B100", "dcm"= "darkgoldenrod4", "mec" =  "darkgoldenrod4", "cobS" =  "darkgoldenrod4", "cobT" =  "darkgoldenrod4")
+  
+  
+grid.col.pathways =  c("Amino acid metabolism" = "#00FFFF", "Sulfur relay system" = "#FF6347", "Metabolism of cofactors and vitamins" = "#D0B100")
+
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 1.5, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(AP4, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.8, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+  circos.text(mean(xlim), ylim[1] + .3, sector.name, facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.6))
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.length = 0.6, sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order1), 
+        fill = grid.col.pathways, 
+       bty = "n", cex = 1.5,
+       x.intersp = 0.5, 
+       title = "Pathway", title.adj = 0.1) 
+
+# re-set circos parameters
+circos.clear()  
+```
+
+
+
+
+**Load AMGs with phyla**
+```{r load AMGs, cache = T}
+# Load AMGs with phyla
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "AMG_Phylum",  col_names = TRUE) ->
+AMG_phylum
+
+# Load the viral taxa
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Phylum",  col_names = TRUE) ->
+Phylum
+
+# Merge
+AMG_Phylum <- AMG_phylum %>% right_join(Phylum, by=c("Contigs"), multiple = "all", relationship = "many-to-many") %>% drop_na(Species.type)
+
+# Write to a csv file
+write.csv(AMG_Phylum, "AMG_Phylum.ods")
+
+# Join with pathways
+AMG_Phylum_Pathways <-  AMG_Phylum %>% right_join(Pathways, by=c("AMG KO"), multiple = "all", relationship = "many-to-many")
+
+# Write to a csv file
+write.csv(AMG_Phylum_Pathways, "AMG_Phylum_Pathways.ods")
+```
+
+
+
+*Plot AMGs with phylum*
+```{r load AMGs with phylum, cache = T}
+AMG_Phylum_Pathways %>%
+subset(Confirm == "Yes")  %>%
+subset(Species.type == "E. pulchripes") %>%
+group_by(Species.type, Seq.type, Phylum, Meta) %>%
+#mutate(Meta, factor(Meta, levels = c("CHT", "EM", "LIP", "NUM", "AAs", "GLY", "C/V", "T/PE", "2oM", "ArC", "SR", "UnM"))) %>%
+reframe(Counts = n()) ->
+AmgPath1
+
+
+ggplot(AmgPath1, aes(x = Meta, y = Counts, fill = Phylum)) + xlab("Phylum") + ylab("Number of AMGs") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="right") +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_brewer(palette = "Set2") +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+ggsave("EpiGlo_viral_genome_quality_MGMT.svg",width = 45, height = 35, units = "cm")
+
+```
+
+# **Load AMGs in form of CAZymes with phylum**
+```{r load CAZ, cache = T}
+# Load CAZ with phyla
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "CAZ",  col_names = TRUE) ->
+CAZ
+
+# Load their taxa
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Phylum",  col_names = TRUE) ->
+Phylum
+
+# Merge
+Phylum_CAZ <-  Phylum %>% right_join(CAZ, by=c("Contigs"), multiple = "all", relationship = "many-to-many")
+
+# Write to a csv file
+write.csv(Phylum_CAZ, "Phylum_CAZ.ods")
+```
+
+
+
+*Plot Load CAZ with phylum*
+```{r load CAZ, cache = T}
+CAZ_M <- Phylum_CAZ %>%
+  subset(Confirmation == "Yes") %>%
+  filter(Substrate %in% c("Chitin", "Chitin/Peptidoglycan", "Different oligosaccharides")) %>%
+  group_by(Species.type, Seq.type, CAZ) %>%
+  summarise(Counts = n())
+
+
+
+grid.col = c(CBM32 = "#CD5C5C", CBM50 = "#39e789ff", CE6  = "#FFFF00", GH0 = "#FF4500", GH104 = "#000080",  GH108  = "#FF00FF",  GH18 = "#800000",  GH19 = "#808000", GH23 = "#0000FF", GH24 = "#800080", GH25 = "#E9967A", GH73 = "#008000", GH9 = "#32CD32",  GT2  = "#008080",  GT25 = "#00FFFF", GT32 = "#808080", GT75 = "#87CEFA")
+
+ggplot(CAZ_M, aes(x = Species.type, y = Counts, fill = CAZ)) + ylab("Number of CAZymes") +
+geom_bar(position="dodge", stat = "identity", colour = "black") + theme_bw() + 
+theme(axis.text=element_text(size=24), axis.ticks=element_line(size=0.8), axis.title = element_text(size = 24)) + 
+theme(legend.position="right") +
+facet_wrap(~Seq.type, ncol = 1) + scale_fill_manual(values = grid.col) +
+theme(legend.text = element_text(colour="black", size = 24), axis.text=element_text(size=24, colour="black"), axis.title=element_text(size=24), legend.title = element_text(size = 24)) 
+
+
+ggsave("EpiGlo_viral_genome_quality_MGMT.svg",width = 45, height = 35, units = "cm")
+
+
+
+# ############################################### Number of unique SVGs
+# Metagenome: E. pulchripes
+WO1 <- Phylum_CAZ %>%
+  subset(Confirmation == "Yes" & Species.type == "E. pulchripes" & Seq.type == "Metagenome") %>%
+  filter(Substrate %in% c("Chitin", "Chitin/Peptidoglycan", "Different oligosaccharides"))
+# Unique SVGs
+W1 <- unique(NO1$Contigs)
+Wo1 <- unique(WO1$Contigs)
+Z1 <- paste(W1, Wo1, sep = "")
+unique_count <- length(unique(Z1))
+unique_count
+
+# Metatranscriptome: E. pulchripes
+WO2 <- Phylum_CAZ %>%
+  subset(Confirmation == "Yes" & Species.type == "E. pulchripes" & Seq.type == "Metatranscriptome") %>%
+  filter(Substrate %in% c("Chitin", "Chitin/Peptidoglycan", "Different oligosaccharides"))
+# Unique SVGs
+W2 <- unique(NO2$Contigs)
+Wo2 <- unique(WO2$Contigs)
+Z2 <- paste(W2, Wo2, sep = "")
+unique_count <- length(unique(Z2))
+unique_count
+
+
+# Metagenome: G. connexa
+WO3 <- Phylum_CAZ %>%
+  subset(Confirmation == "Yes" & Species.type == "G. connexa" & Seq.type == "Metagenome") %>%
+  filter(Substrate %in% c("Chitin", "Chitin/Peptidoglycan", "Different oligosaccharides"))
+# Unique SVGs
+W3 <- unique(NO3$Contigs)
+Wo3 <- unique(WO3$Contigs)
+Z3 <- paste(W3, Wo3, sep = "")
+unique_count <- length(unique(Z3))
+unique_count
+
+
+# Metatranscriptome: G. connexa
+WO4 <- Phylum_CAZ %>%
+  subset(Confirmation == "Yes" & Species.type == "G. connexa" & Seq.type == "Metatranscriptome") %>%
+  filter(Substrate %in% c("Chitin", "Chitin/Peptidoglycan", "Different oligosaccharides"))
+# Unique SVGs
+W4 <- unique(NO4$Contigs)
+Wo4 <- unique(WO4$Contigs)
+Z4 <- paste(W4, Wo4, sep = "")
+unique_count <- length(unique(Z4))
+unique_count
+```
+
+
+
+**Load the gene gene mapping for the identified AMGs**
+```{r load gggenomes, cache = T}
+# colour codes for plotting
+# n <- 30
+# qual_col_pals = unique(brewer.pal.info[brewer.pal.info$category == 'qual',])
+# col_vector = unique(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))))
+# colour20 <-  sample(col_vector, 30)
+
+# Load data
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Gene_diagram",  col_names = TRUE) ->
+Gene_diagram
+
+
+pom9 <- c(`Viral hallmark gene` = "#CE2929", `Viral-like gene` = "#000080", "Amino acid metabolism" = "#00FFFF", "Biosynthesis of other secondary metabolites" = "#e00272ff", "Carbohydrate metabolism" = "#008080", "Energy metabolism" = "#FAF0E6", "Sulfur relay system" = "#FF6347", "Glycan biosynthesis and metabolism" = "#5675D6", "Lipid metabolism" = "#FF8B07", "Metabolism of cofactors and vitamins" = "#D0B100", "Metabolism of terpenoids and polyketides" = "#AE4371", "Nucleotide metabolism" = "#FF00FF", "UcM" =  "#00FF00", "Xenobiotics biodegradation and metabolism" =  "#FFFF00", "Antibiotic resistance" = "#800000", "NA" = "#636363")
+```
+
+**Plot gene mapping**
+```{r load gggenomes, cache = T}
+## For metagenome from E. pulchripes
+# Select the first 20 different rows in the SVGs column
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(1:10)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3) 
+  
+
+ggsave("Epi_AMGs_MAP_MG1_10.svg",width = 45, height = 30, units = "cm")
+
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(11:20)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG11_20.svg",width = 45, height = 30, units = "cm")
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(21:30)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG21_30.svg",width = 45, height = 30, units = "cm")
+
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(31:40)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG31_40.svg",width = 45, height = 30, units = "cm")
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(41:50)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG41_50.svg",width = 45, height = 30, units = "cm")
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(51:60)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG51_60.svg",width = 45, height = 30, units = "cm")
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(61:70)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG61_70.svg",width = 45, height = 30, units = "cm")
+
+
+
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(71:80)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MG61_70.svg",width = 45, height = 30, units = "cm")
+
+
+
+#### Metatranscriptomes from E. pulchripes
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "E. pulchripes" & `Library type` == "Metatranscriptome") %>%
+  distinct(SVGs) %>%
+  slice(1:100)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Epi_AMGs_MAP_MT_all.svg",width = 45, height = 30, units = "cm")
+
+
+
+
+
+
+
+# Metagenomes from G. connexa
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "G. connexa" & `Library type` == "Metagenome") %>%
+  distinct(SVGs) %>%
+  slice(1:100)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Glo_AMGs_MAP_MG_all.svg",width = 45, height = 30, units = "cm")
+
+
+# Metatranscriptome from G. connexa
+
+selected_rows <- Gene_diagram %>% 
+  subset(`Species type` == "G. connexa" & `Library type` == "Metatranscriptome") %>%
+  distinct(SVGs) %>%
+  slice(1:100)
+
+# Filter the original data based on the selected rows
+filtered_data <- Gene_diagram %>%
+  semi_join(selected_rows, by = "SVGs")
+
+# Plot the gene arrow diagram using the filtered data
+filtered_data %>%
+mutate(Pathway = factor(Pathway, levels = c("Viral hallmark gene", "Viral-like gene", "Amino acid metabolism", "Biosynthesis of other secondary metabolites", "Carbohydrate metabolism", "Energy metabolism", "Sulfur relay system", "Glycan biosynthesis and metabolism", "Lipid metabolism", "Metabolism of cofactors and vitamins", "Metabolism of terpenoids and polyketides", "Nucleotide metabolism", "Unclassified metabolism", "Xenobiotics biodegradation and metabolism", "Antibiotic resistance", "NA"))) %>%
+ggplot(aes(xmin = start, xmax = end, y = SVGs, fill = Pathway)) +
+  geom_gene_arrow() +
+  facet_wrap(~ SVGs, scales = "free", ncol = 1) +
+  scale_fill_manual(values = pom9) +
+  theme_genes() + 
+ geom_text(data = filtered_data %>% mutate(start = (start + end)/2), aes(x = start, label = Code), size = 4, nudge_y = 0.3) +
+ geom_text(data = filtered_data, aes(x = 1, label = Phylum), hjust = 0.5, size = 4, nudge_y = -0.3)
+
+ggsave("Glo_AMGs_MAP_MT_all.svg",width = 45, height = 30, units = "cm")
+```
+

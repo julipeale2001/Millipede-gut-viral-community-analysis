@@ -1,0 +1,315 @@
+---
+title: "Viral host prediction"
+subtitle: "Prokaryotic host prediction for viruses"
+author: "Nweze Julius"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    code_folding: show
+    dev: png
+    df_print: kable
+    fig_caption: yes
+    highlight: pygments
+    keep_md: yes
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '5'
+link-citations: yes
+csl: fems-microbiology-ecology.csl
+subtitle: Host prediction for viruses
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries, include=F}
+# Load libraries
+#.libPaths(c('~/R/library', .libPaths())) # Uncomment if you have no write access to R path
+
+repo <- "http://cran.wu.ac.at"
+lib.loc <- Sys.getenv("R_LIBS_USER")
+
+update.packages(
+    lib.loc, 
+    repos = repo,
+    ask = FALSE
+)
+
+.cran_libs <- c(
+ "knitr", # A General-Purpose Package for Dynamic Report Generation in R
+ "kableExtra", # Construct Complex Table with 'kable' and Pipe Syntax
+#  "rmarkdown", # Dynamic Documents for R
+  "extrafont", # for extra figure fonts
+  "tidyverse", # for dplyr forcats ggplot2 readr tibble
+  "readODS", # #Read ODS Files
+ "grid", # The Grid Graphics Package
+#  "magrittr", # pipes
+  "scales", # Generic plot scaling methods
+  "svglite", # for svg files
+#  "vagen",
+"Polychrome",
+"ggtree",
+"gggenomes",
+"Cairo",
+"gggenes",
+"ComplexHeatmap",
+"circlize",
+ "RColorBrewer",
+ "car", # Companion to Applied Regression
+ "rcompanion", #Functions to Support Extension Education Program Evaluation
+ "multcomp", # Simultaneous Inference in General Parametric Models
+ "nlme", # Fit Linear Model Using Generalized Least Squares
+# "ggResidpanel", # Panels and Interactive Versions of Diagnostic Plots using
+ "emmeans", # Estimated Marginal Means, aka Least-Squares Means
+"performance" # Assessment of Regression Models Performance 
+) 
+
+.inst <- .cran_libs %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(.cran_libs[!.inst],
+                    repos = repo,
+                    lib = lib.loc)
+}
+
+.bioc_libs <- c(
+  #"multtest", #Resampling-based multiple hypothesis testing
+)
+
+.bioc_inst <- .bioc_libs %in% installed.packages()
+if (any(!.bioc_inst)) {
+   if (!requireNamespace("BiocManager", quietly = TRUE))
+   install.packages("BiocManager")
+   BiocManager::install(ask = F, lib = lib.loc)  # upgrade bioC packages
+   BiocManager::install(.bioc_libs[!.bioc_inst], ask = F, lib = lib.loc)
+}
+
+.local_libs <- c()
+
+.inst <- names(.local_libs) %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(paste0("~/R/", .local_libs[!.inst]) ,repos = NULL, type = "source", lib = lib.loc)
+}
+
+.github_libs <- c(
+  "wilkelab/ggtext", # Improved text rendering support for 'ggplot2' 
+  "ACCLAB/dabestr" # Data Analysis using Bootstrap-Coupled Estimation 
+)
+
+.github_lib_names <- stringr::str_replace(.github_libs, ".*/(.*)$", "\\1")
+
+.github_inst <- .github_lib_names %in% installed.packages()
+if (any(!.github_inst)) {
+  devtools::install_github(.github_libs[!.github_inst],
+                           lib = lib.loc,
+                           dependencies = TRUE)
+}
+
+# Load packages into session, and print package version
+(loaded.libs <- sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), require, character.only = TRUE))
+if (!all(loaded.libs)) {stop(paste("Package(s):", names(loaded.libs[loaded.libs == FALSE]), "could not be loaded"))}
+sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), packageVersion)
+```
+
+
+**Load data**
+```{r load viruses data, cache = T}
+# Load virus data
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Host",  col_names = TRUE) ->
+Virus_Host
+
+
+read_ods("Host_prediction_to_genus_m90.ods", sheet = "Viruses",  col_names = TRUE) ->
+Virus_names
+
+# Merge
+Virus_name_host <-  Virus_Host %>% right_join(Virus_names , by=c("Contigs"), multiple = "all", relationship = "many-to-many") %>% drop_na(b_Phylum)
+
+# Write to a csv file
+write.csv(Virus_name_host, "Virus_name_host.ods")
+```
+
+
+**Chord Diagram (circlize) for predicted hosts found in E. pulchripes**
+```{r plotting viruses data E. pulchripes, cache = T}
+# Most predicted hosts
+Virus_name_host %>%
+subset(Species.type == "E. pulchripes") %>%
+group_by(b_Phylum) %>%
+reframe(Counts = n())  %>%
+mutate(percent = Counts/sum(Counts)*100) 
+
+# Viral with predicted hosts
+Virus_name_host %>%
+subset(Species.type == "E. pulchripes") %>%
+group_by(Phylum) %>%
+reframe(Counts = n())  %>%
+mutate(percent = Counts/sum(Counts)*100)
+
+
+# Plot
+Virus_name_host %>%
+subset(Species.type == "E. pulchripes") %>%
+group_by(Phylum, b_Phylum) %>%
+reframe(Counts = n()) ->
+V1
+
+
+order = c("Uroviricota", "Cressdnaviricota", "Hofneiviricota", "Phixviricota",   "Actinobacteriota", "Bacteroidota", "Cyanobacteria", "Desulfobacterota", "Bacillota", "Planctomycetota", "Pseudomonadota", "Verrucomicrobiota", "Spirochaetota", "Synergistota", "Patescibacteria")
+
+order1 = c("Uroviricota", "Cressdnaviricota", "Hofneiviricota", "Phixviricota")
+
+order2 = c("Actinobacteriota", "Bacteroidota", "Cyanobacteria", "Desulfobacterota", "Bacillota", "Planctomycetota", "Pseudomonadota", "Verrucomicrobiota", "Spirochaetota", "Synergistota", "Patescibacteria")
+
+
+grid.col =  c(Uroviricota = "#428953", Cressdnaviricota = "mediumorchid2", Hofneiviricota = "#636363", Phixviricota = "peachpuff3", Actinobacteriota = "#5675D6", Bacteroidota = "#CE2929", Cyanobacteria = "#D0B100", Desulfobacterota = "#FF00FF", Bacillota = "#FF8B07", Planctomycetota = "chartreuse3", Pseudomonadota = "darkgoldenrod4",Verrucomicrobiota = "#65ECEF", Spirochaetota = "#FFFF00",  Synergistota = "#F5DEB3", Patescibacteria = "#000080")
+
+
+grid.col1 =  c(Uroviricota = "#428953", Cressdnaviricota = "mediumorchid2", Hofneiviricota = "#636363", Phixviricota = "peachpuff3")
+
+
+grid.col2 =  c(Actinobacteriota = "#5675D6", Bacteroidota = "#CE2929", Cyanobacteria = "#D0B100", Desulfobacterota = "#FF00FF", Bacillota = "#FF8B07", Planctomycetota = "chartreuse3", Pseudomonadota = "darkgoldenrod4",Verrucomicrobiota = "#65ECEF", Spirochaetota = "#FFFF00",  Synergistota = "#F5DEB3", Patescibacteria = "#000080")
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(V1, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.6, major.tick.percentage = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.005, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+```
+
+
+
+
+
+**Chord Diagram (circlize) for predicted hosts found in G. connexa**
+```{r plotting viruses data G. connexa, cache = T}
+# Most predicted hosts
+Virus_name_host %>%
+subset(Species.type == "G. connexa") %>%
+group_by(b_Phylum) %>%
+reframe(Counts = n())  %>%
+mutate(percent = Counts/sum(Counts)*100) 
+
+# Viral with predicted hosts
+Virus_name_host %>%
+subset(Species.type == "G. connexa") %>%
+group_by(Phylum) %>%
+reframe(Counts = n())  %>%
+mutate(percent = Counts/sum(Counts)*100)
+
+
+
+# Plot
+Virus_name_host %>%
+subset(Species.type == "G. connexa") %>%
+group_by(Phylum, b_Phylum) %>%
+reframe(Counts = n()) ->
+V2
+
+
+order = c("Uroviricota", "Cossaviricota", "Actinobacteriota", "Bacteroidota", "Bacillota", "Pseudomonadota", "Unknown")
+
+order1 = c("Uroviricota", "Cossaviricota")
+
+order2 = c("Actinobacteriota", "Bacteroidota", "Bacillota", "Pseudomonadota", "Unknown")
+
+
+
+
+grid.col =  c(Uroviricota = "#428953", Cossaviricota = "#AE4371", Actinobacteriota = "#5675D6", Bacteroidota = "#CE2929",  Bacillota = "#FF8B07", Pseudomonadota = "darkgoldenrod4", Unknown = "#F5DEB3")
+
+
+
+
+grid.col1 =  c(Uroviricota = "#428953", Cossaviricota = "#AE4371", Hofneiviricota = "#636363", Phixviricota = "peachpuff3")
+
+
+grid.col2 =  c(Actinobacteriota = "#5675D6", Bacteroidota = "#CE2929",  Bacillota = "#FF8B07", Pseudomonadota = "darkgoldenrod4", Unknown = "#F5DEB3")
+
+set.seed(300000000) 
+
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(V2, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.6, major.tick.percentage = 0.5,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.005, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Phylum", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+```
+
