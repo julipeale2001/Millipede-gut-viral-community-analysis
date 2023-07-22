@@ -1,0 +1,857 @@
+---
+title: "virus-microbial-ratios in the hinguts of E. pulhcripes and G. connexa"
+subtitle: "vMR in hinguts of E. pulhcripes and G. connexa"
+author: "Nweze Julius"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+    code_folding: show
+    dev: png
+    df_print: kable
+    fig_caption: yes
+    highlight: pygments
+    keep_md: yes
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '5'
+link-citations: yes
+csl: fems-microbiology-ecology.csl
+subtitle: CRISPRCas
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r libraries, include=F}
+# Load libraries
+#.libPaths(c('~/R/library', .libPaths())) # Uncomment if you have no write access to R path
+
+repo <- "http://cran.wu.ac.at"
+lib.loc <- Sys.getenv("R_LIBS_USER")
+
+update.packages(
+    lib.loc, 
+    repos = repo,
+    ask = FALSE
+)
+
+.cran_libs <- c(
+ "knitr", # A General-Purpose Package for Dynamic Report Generation in R
+ "kableExtra", # Construct Complex Table with 'kable' and Pipe Syntax
+#  "rmarkdown", # Dynamic Documents for R
+  "extrafont", # for extra figure fonts
+  "tidyverse", # for dplyr forcats ggplot2 readr tibble
+  "readODS", # #Read ODS Files
+ "grid", # The Grid Graphics Package
+#  "magrittr", # pipes
+  "scales", # Generic plot scaling methods
+  "svglite", # for svg files
+#  "vagen",
+"Polychrome",
+"ggtree",
+"gggenomes",
+"Cairo",
+"gggenes",
+"ggpubr",
+"ComplexHeatmap",
+"circlize",
+ "RColorBrewer",
+ "car", # Companion to Applied Regression
+ "rcompanion", #Functions to Support Extension Education Program Evaluation
+ "multcomp", # Simultaneous Inference in General Parametric Models
+ "nlme", # Fit Linear Model Using Generalized Least Squares
+# "ggResidpanel", # Panels and Interactive Versions of Diagnostic Plots using
+ "emmeans", # Estimated Marginal Means, aka Least-Squares Means
+"performance" # Assessment of Regression Models Performance 
+) 
+
+.inst <- .cran_libs %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(.cran_libs[!.inst],
+                    repos = repo,
+                    lib = lib.loc)
+}
+
+.bioc_libs <- c(
+  #"multtest", #Resampling-based multiple hypothesis testing
+)
+
+.bioc_inst <- .bioc_libs %in% installed.packages()
+if (any(!.bioc_inst)) {
+   if (!requireNamespace("BiocManager", quietly = TRUE))
+   install.packages("BiocManager")
+   BiocManager::install(ask = F, lib = lib.loc)  # upgrade bioC packages
+   BiocManager::install(.bioc_libs[!.bioc_inst], ask = F, lib = lib.loc)
+}
+
+.local_libs <- c()
+
+.inst <- names(.local_libs) %in% installed.packages()
+if (any(!.inst)) {
+   install.packages(paste0("~/R/", .local_libs[!.inst]) ,repos = NULL, type = "source", lib = lib.loc)
+}
+
+.github_libs <- c(
+  "wilkelab/ggtext", # Improved text rendering support for 'ggplot2' 
+  "ACCLAB/dabestr" # Data Analysis using Bootstrap-Coupled Estimation 
+)
+
+.github_lib_names <- stringr::str_replace(.github_libs, ".*/(.*)$", "\\1")
+
+.github_inst <- .github_lib_names %in% installed.packages()
+if (any(!.github_inst)) {
+  devtools::install_github(.github_libs[!.github_inst],
+                           lib = lib.loc,
+                           dependencies = TRUE)
+}
+
+# Load packages into session, and print package version
+(loaded.libs <- sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), require, character.only = TRUE))
+if (!all(loaded.libs)) {stop(paste("Package(s):", names(loaded.libs[loaded.libs == FALSE]), "could not be loaded"))}
+sapply(c(.cran_libs, .bioc_libs, names(.local_libs), .github_lib_names), packageVersion)
+```
+
+
+
+**Load MCP from the metagenome**
+```{r load mcp, cache = T}
+# Load data
+read_ods("vMR.ods", sheet = "MCP_taxa",  col_names = TRUE) ->
+mcp_taxa
+read_ods("vMR.ods", sheet = "MCP_abundance",  col_names = TRUE) ->
+mcp_abundance
+
+# Merge
+MCP_abundance <- mcp_taxa %>% right_join(mcp_abundance, by=c("Species.type", "Contigs"), multiple = "all", relationship = "many-to-many")  %>% drop_na(`annotation_description`)
+
+write.csv(MCP_abundance, "MCP_abundance.csv")
+
+
+# Save an object to a file
+saveRDS(MCP_abundance, file = "RDS/MCP_abundance.rds")
+MCP_abundance <- readRDS("RDS/MCP_abundance.rds")
+```
+**MCP Plot**
+```{r plot mcp, cache = T}
+# Number of MCPs
+MCP_abundance %>%
+  subset(TPM > 0) %>%
+  group_by(Species.type, Class) %>%
+  reframe(Counts = n())
+
+# Abundance in percentage
+MCP_abundance %>%
+group_by(Species.type, Class) %>%
+reframe(DE = sum(TPM)) %>%
+group_by(Species.type) %>%
+mutate(percent = DE/sum(DE)*100) %>%
+group_by(Species.type, Class) %>%
+reframe(Percent = percent) ->
+MCP1 
+
+
+# Abundance in TPM
+MCP_abundance %>%
+group_by(Species.type, Class) %>%
+reframe(DE = sum(TPM)/10000) ->
+MCP2
+
+
+# PLot ciros
+order =  c("G. connexa", "E. pulchripes", "Caudoviricetes", "Phixviricota", "Preplasmiviricota", "Nucleocytoviricota", "Unclassified virus")
+
+order1 =  c("G. connexa", "E. pulchripes")
+
+order2 =  c("Caudoviricetes", "Phixviricota", "Preplasmiviricota", "Nucleocytoviricota", "Unclassified virus")
+
+grid.col =  c(`G. connexa` = "#5675D6", `E. pulchripes` = "#428953", Caudoviricetes = "#0066FFFF", Phixviricota = "#FF8B07", Preplasmiviricota = "#D0B100", Nucleocytoviricota = "peachpuff3", `Unclassified virus` = "#65ECEF")
+
+
+grid.col1 =  c(`G. connexa` = "#5675D6", `E. pulchripes` = "#428953")
+
+
+grid.col2 =  c(Caudoviricetes = "#0066FFFF", Phixviricota = "#FF8B07", Preplasmiviricota = "#D0B100",  Nucleocytoviricota = "peachpuff3", `Unclassified virus` = "#65ECEF")
+
+set.seed(300000000) 
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(MCP2, annotationTrack = "grid", order = order,  preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 1, major.tick.percentage = 1,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Viruses", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.005, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+
+```
+
+
+
+**Load RdRPs from the metagenome**
+```{r load RdRPs, cache = T}
+# Load data
+read_ods("vMR.ods", sheet = "RdRPs_taxa",  col_names = TRUE) ->
+RdRPs_taxa
+read_ods("vMR.ods", sheet = "RdRPs_abundance",  col_names = TRUE) ->
+RdRPs_abundance
+
+# Merge
+RdRPs_taxa_abundance <- RdRPs_taxa %>% right_join(RdRPs_abundance, by=c("Species.type", "Contigs"), multiple = "all", relationship = "many-to-many")  %>% drop_na(`annotation_description`)
+
+write.csv(RdRPs_taxa_abundance, "RdRPs_taxa_abundance.csv")
+
+
+# Save an object to a file
+saveRDS(RdRPs_taxa_abundance, file = "RDS/RdRPs_taxa_abundance.rds")
+RdRPs_taxa_abundance <- readRDS("RDS/RdRPs_taxa_abundance.rds")
+```
+
+**RdRPs Plot**
+```{r plot RdRPs, cache = T}
+# Number of RdRPs
+RdRPs_taxa_abundance %>%
+  subset(TPM > 0) %>%
+  group_by(Species.type, Class) %>%
+  reframe(Counts = n())
+
+# Abundance in percentage
+RdRPs_taxa_abundance %>%
+group_by(Species.type, Class) %>%
+reframe(DE = sum(TPM)) %>%
+group_by(Species.type) %>%
+mutate(percent = DE/sum(DE)*100) %>%
+group_by(Species.type, Class) %>%
+reframe(Percent = percent) ->
+RdRPs1 
+
+
+# Abundance in TPM
+RdRPs_taxa_abundance %>%
+subset(TPM > 0) %>%
+group_by(Species.type, Class) %>%
+reframe(DE = sum(TPM)/1000) ->
+RdRPs2
+
+
+# PLot ciros
+order =  c("G. connexa", "E. pulchripes", "Duplornaviricota", "Kitrinoviricota", "Negarnaviricota", "Pisuviricota", "Orthornavirae")
+
+order1 =  c("G. connexa", "E. pulchripes")
+
+order2 =  c("Duplornaviricota", "Kitrinoviricota", "Negarnaviricota", "Pisuviricota", "Orthornavirae")
+
+grid.col =  c(`G. connexa` = "#5675D6", `E. pulchripes` = "#428953", "Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2", Orthornavirae = "#65ECEF")
+
+
+grid.col1 =  c(`G. connexa` = "#5675D6", `E. pulchripes` = "#428953")
+
+
+grid.col2 =  c("Duplornaviricota" = "#CCFF00FF", "Kitrinoviricota" = "chartreuse3", "Negarnaviricota" = "peachpuff3", "Pisuviricota" = "mediumorchid2", Orthornavirae = "#65ECEF")
+
+set.seed(300000000) 
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(RdRPs2, annotationTrack = "grid", order = order,  preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 1,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Viruses", title.adj = 0.1) 
+
+legend(x = 0.8, y = 0.005, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+```
+
+
+
+
+
+**Load USCGs_40_COG_taxa from the metagenome**
+```{r load USCGs_40_COG_taxa, cache = T}
+# Load data
+read_ods("vMR.ods", sheet = "40_COG_taxa",  col_names = TRUE) ->
+USCGs_40_COG_taxa
+
+
+read_ods("vMR.ods", sheet = "40_COG_abundance",  col_names = TRUE) ->
+USCGs_40_COG_abundance
+
+
+# Merge
+USCGs_40_COG_taxa_abundance <- USCGs_40_COG_taxa %>% right_join(USCGs_40_COG_abundance, by=c("Species.type", "Seq.type", "Contigs"), multiple = "all", relationship = "many-to-many")  %>% drop_na()
+
+
+# Write to a csv file
+write.csv(USCGs_40_COG_taxa_abundance, "USCGs_40_COG_taxa_abundance.csv")
+
+
+# Save an object to a file
+saveRDS(USCGs_40_COG_taxa_abundance, file = "RDS/USCGs_40_COG_taxa_abundance.rds")
+USCGs_40_COG_taxa_abundance <- readRDS("RDS/USCGs_40_COG_taxa_abundance.rds")
+
+
+
+
+# Average USCGs_40_COG_taxa_abundance
+USCGs_40_COG_taxa_abundance %>%
+  subset(TPM > 0) %>%
+  group_by(Species.type, Seq.type, COG, `Common name`, Phylum, Class) %>%
+  summarise(percent = mean(TPM)) %>%
+  ungroup() %>%
+
+write.csv("Average_USCGs_40_COG_all_abundance.csv")
+
+
+
+# Average USCGs_40_COG_taxa_abundance
+USCGs_40_COG_taxa_abundance %>%
+  filter(`Common name` == "Bacteria") %>%
+  filter(TPM > 0) %>%
+  group_by(COG) %>%
+  summarise(mean_percent = mean(TPM)) %>%
+  top_n(15, wt = mean_percent) %>%
+  arrange(desc(mean_percent)) %>%
+  inner_join(USCGs_40_COG_taxa_abundance, by = "COG") %>%
+#  filter(`Common name` == "Bacteria") %>%
+  group_by(Species.type, Seq.type, COG, `Common name`, Phylum, Class) %>%
+  summarise(percent = mean(TPM)) %>%
+  ungroup() %>%
+
+
+write.csv("TOP15_Average_USCGs_40_COG_abundance.csv")
+
+
+# Top 15 USCGs
+# Average USCGs_40_COG_taxa_abundance
+USCGs_40_COG_taxa_abundance %>%
+  filter(TPM > 0) %>%
+  group_by(COG) %>%
+  summarise(mean_percent = mean(TPM)) %>%
+  top_n(15, wt = mean_percent) %>%
+  arrange(desc(mean_percent)) %>%
+  inner_join(USCGs_40_COG_taxa_abundance, by = "COG") %>%
+  group_by(Species.type, Seq.type, COG, `Common name`, Phylum, Class) %>%
+  summarise(percent = mean(TPM)) %>%
+  ungroup() %>%
+
+write.csv("USCGs_40_COG_TOP15_taxa_abundance.csv")
+```
+
+
+
+**USCGs_40_COG_taxa_abundance Plot**
+```{r plot USCGs_40_COG_taxa_abundance, cache = T}
+# Number of USCGs
+USCGs_40_COG_taxa_abundance %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+  subset(TPM > 0) %>%
+  group_by(Species.type, Seq.type, `Common name`) %>%
+  reframe(Counts = n())
+
+
+# Number of USCGs
+USCGs_40_COG_taxa_abundance %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+  subset(TPM > 0) %>%
+  group_by(Species.type, Seq.type, COG, `Common name`) %>%
+  reframe(Counts = n())
+
+# Number of USCGs for each domain in E. pulchripes metagenome
+USCGs_40_COG_taxa_abundance %>%
+  filter(Species.type == "E. pulchripes" & Seq.type == "Metagenome") %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+#  subset(TPM > 0) %>%
+  group_by(COG, `Common name`) %>%
+  summarise(COG = list(unique(COG))) %>%
+  mutate(n_COG = lengths(COG)) %>%
+  kable(digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) 
+
+
+# Number of USCGs for each domain in E. pulchripes Metatranscriptome
+USCGs_40_COG_taxa_abundance %>%
+  filter(Species.type == "E. pulchripes" & Seq.type == "Metatranscriptome") %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+#  subset(TPM > 0) %>%
+  group_by(COG, `Common name`) %>%
+  summarise(COG = list(unique(COG))) %>%
+  mutate(n_COG = lengths(COG)) %>%
+  kable(digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+# Number of USCGs for each domain in G. connexa metagenome
+USCGs_40_COG_taxa_abundance %>%
+  filter(Species.type == "G. connexa" & Seq.type == "Metagenome") %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+#  subset(TPM > 0) %>%
+  group_by(COG, `Common name`) %>%
+  summarise(COG = list(unique(COG))) %>%
+  mutate(n_COG = lengths(COG)) %>%
+  kable(digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+# Number of USCGs for each domain in G. connexa Metatranscriptome
+USCGs_40_COG_taxa_abundance %>%
+  filter(Species.type == "G. connexa" & Seq.type == "Metatranscriptome") %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+#  subset(TPM > 0) %>%
+  group_by(COG, `Common name`) %>%
+  summarise(COG = list(unique(COG))) %>%
+  mutate(n_COG = lengths(COG)) %>%
+  kable(digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F)
+
+
+
+# Abundance in percentage
+USCGs_40_COG_taxa_abundance %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+  group_by(Species.type, Seq.type, `Common name`) %>%
+  summarise(DE = sum(TPM)) %>%
+  group_by(Species.type, Seq.type) %>%
+  mutate(percent = DE / sum(DE) * 100) %>%
+  ungroup() ->
+USCGs1 
+
+
+# Abundance in percentage in Bacteria
+USCGs_40_COG_taxa_abundance %>%
+  subset(`Common name` == "Bacteria") %>%
+  filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+  group_by(Species.type, Seq.type, Phylum) %>%
+  summarise(DE = sum(TPM)) %>%
+  group_by(Species.type, Seq.type) %>%
+  mutate(percent = DE / sum(DE) * 100) %>%
+  ungroup() %>%
+  group_by(Species.type, Seq.type) %>%
+  arrange(.by_group = TRUE, desc(percent)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) 
+
+
+
+# Abundance in TPM
+USCGs_40_COG_taxa_abundance$Species.Seq <- paste(USCGs_40_COG_taxa_abundance$Species.type, USCGs_40_COG_taxa_abundance$Seq.type, sep="_")
+
+USCGs_40_COG_taxa_abundance$Domain.phylum <- paste(USCGs_40_COG_taxa_abundance$Domain, USCGs_40_COG_taxa_abundance$Phylum, sep="_")
+
+USCGs_40_COG_taxa_abundance %>%
+subset(`Common name` == "Bacteria" | `Common name` == "Archaea") %>%
+filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+subset(TPM > 0) %>%
+group_by(Species.Seq, Domain.phylum) %>%
+reframe(DE = sum(TPM)/1000000) ->
+USCGs2
+
+
+# PLot ciros for prokaryotes
+order =  c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "Archaea_Candidatus Thermoplasmatota", "Archaea_Euryarchaeota", "Archaea_Crenarchaeota", "Archaea_Unclassified archaea", "Bacteria_Acidobacteriota", "Bacteria_Actinomycetota", "Bacteria_Aquificota", "Bacteria_Armatimonadota", "Bacteria_Bacillota", "Bacteria_Bacteroidota", "Bacteria_Bdellovibrionota", "Bacteria_Candidatus Bipolaricaulota", "Bacteria_Candidatus Eisenbacteria", "Bacteria_Candidatus Latescibacteria", "Bacteria_Candidatus Saccharibacteria", "Bacteria_Candidatus Eremiobacterota", "Bacteria_Chlorobiota", "Bacteria_Chloroflexota", "Bacteria_Chrysiogenota", "Bacteria_Cyanobacteria", "Bacteria_Deinococcus-Thermus", "Bacteria_Desulfobacteriota", "Bacteria_Elusimicrobiota", "Bacteria_Fibrobacterota", "Bacteria_Gemmatimonadota", "Bacteria_Ignavibacteriota", "Bacteria_Kiritimatiellaeota", "Bacteria_Lentisphaerota", "Bacteria_Myxococcota", "Bacteria_Nitrospinota", "Bacteria_Planctomycetota", "Bacteria_Pseudomonadota",  "Bacteria_Rhodothermaeota", "Bacteria_Spirochaetota", "Bacteria_Synergistota", "Bacteria_Verrucomicrobiota", "Bacteria_Zixibacteria",  "Bacteria_Unclassified bacteria")
+
+order1 =  c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")
+
+order2 =  c("Archaea_Candidatus Thermoplasmatota", "Archaea_Euryarchaeota", "Archaea_Crenarchaeota", "Archaea_Unclassified archaea", "Bacteria_Acidobacteriota", "Bacteria_Actinomycetota", "Bacteria_Aquificota", "Bacteria_Armatimonadota", "Bacteria_Bacillota", "Bacteria_Bacteroidota", "Bacteria_Bdellovibrionota", "Bacteria_Candidatus Bipolaricaulota", "Bacteria_Candidatus Eisenbacteria", "Bacteria_Candidatus Latescibacteria", "Bacteria_Candidatus Saccharibacteria", "Bacteria_Candidatus Eremiobacterota", "Bacteria_Chlorobiota", "Bacteria_Chloroflexota", "Bacteria_Chrysiogenota", "Bacteria_Cyanobacteria", "Bacteria_Deinococcus-Thermus", "Bacteria_Desulfobacteriota", "Bacteria_Elusimicrobiota", "Bacteria_Fibrobacterota", "Bacteria_Gemmatimonadota", "Bacteria_Ignavibacteriota", "Bacteria_Kiritimatiellaeota", "Bacteria_Lentisphaerota", "Bacteria_Myxococcota", "Bacteria_Nitrospinota", "Bacteria_Planctomycetota", "Bacteria_Pseudomonadota",  "Bacteria_Rhodothermaeota", "Bacteria_Spirochaetota", "Bacteria_Synergistota", "Bacteria_Verrucomicrobiota", "Bacteria_Zixibacteria",  "Bacteria_Unclassified bacteria")
+
+
+
+grid.col =  c(`G. connexa_Metatranscriptome` = "#8A2BE2", `G. connexa_Metagenome` = "#e00272ff", `E. pulchripes_Metatranscriptome` = "#8A2BE2", `E. pulchripes_Metagenome` = "#e00272ff", `Archaea_Candidatus Thermoplasmatota` = "#800080", Archaea_Euryarchaeota = "#A52A2A", Archaea_Crenarchaeota = "#E5FFCC", `Archaea_Unclassified archaea` = "#330019", Bacteria_Acidobacteriota = "#FF6347", Bacteria_Actinomycetota = "#5675D6", Bacteria_Aquificae  = "#CD5C5C", Bacteria_Armatimonadota = "#E9967A", Bacteria_Bacillota = "#FF8B07", Bacteria_Bacteroidota = "#CE2929", Bacteria_Bdellovibrionota = "#0000FF", `Bacteria_Candidatus Bipolaricaulota` = "#9400D3", `Bacteria_Candidatus Eisenbacteria` = "#CD3700", `Bacteria_Candidatus Latescibacteria` = "#CDCD00", `Bacteria_Candidatus Saccharibacteria` = "#EED8AE", `Bacteria_Candidatus Eremiobacterota` = "#A0522D", Bacteria_Chlorobiota = "#A1F289", Bacteria_Chloroflexota = "#008080", Bacteria_Chrysiogenota = "#000080", Bacteria_Cyanobacteria  = "#D0B100", `Bacteria_Deinococcus-Thermus` = "#006400", Bacteria_Desulfobacteriota = "#FF00FF", Bacteria_Elusimicrobiota = "#BC3F8E", Bacteria_Fibrobacterota = "#2E8B57", Bacteria_Gemmatimonadota  = "#800000", Bacteria_Ignavibacteriota = "#FFE5CC", Bacteria_Kiritimatiellaeota = "#DFA54E", Bacteria_Lentisphaerota  = "#808000", Bacteria_Myxococcota = "#8A2BE2", Bacteria_Nitrospinota = "#00FF00", Bacteria_Planctomycetota = "#CAE1FF", Bacteria_Pseudomonadota = "darkgoldenrod4", Bacteria_Rhodothermaeota = "#808080", Bacteria_Spirochaetota = "#FFFF00", Bacteria_Synergistota = "#F5DEB3",  Bacteria_Verrucomicrobiota = "#65ECEF", Bacteria_Zixibacteria = "hotpink2", `Bacteria_Unclassified bacteria`  = "#C0C0C0")
+
+
+grid.col1 =  c("G. connexa_Metatranscriptome" = "#8A2BE2", "G. connexa_Metagenome" = "#e00272ff", "E. pulchripes_Metatranscriptome" = "#8A2BE2", "E. pulchripes_Metagenome" = "#e00272ff")
+
+
+grid.col2 =  c(Archaea_Crenarchaeota = "#E5FFCC", `Archaea_Unclassified archaea` = "#330019", Bacteria_Acidobacteriota = "#FF6347", Bacteria_Actinomycetota = "#5675D6", Bacteria_Aquificae  = "#CD5C5C", Bacteria_Armatimonadota = "#E9967A", Bacteria_Bacillota = "#FF8B07", Bacteria_Bacteroidota = "#CE2929", Bacteria_Bdellovibrionota = "#0000FF", `Bacteria_Candidatus Bipolaricaulota` = "#9400D3", `Bacteria_Candidatus Eisenbacteria` = "#CD3700", `Bacteria_Candidatus Latescibacteria` = "#CDCD00", `Bacteria_Candidatus Saccharibacteria` = "#EED8AE", `Bacteria_Candidatus Eremiobacterota` = "#A0522D", Bacteria_Chlorobiota = "#A1F289", Bacteria_Chloroflexota = "#008080", Bacteria_Chrysiogenota = "#000080", Bacteria_Cyanobacteria  = "#D0B100", `Bacteria_Deinococcus-Thermus` = "#006400", Bacteria_Desulfobacteriota = "#FF00FF", Bacteria_Elusimicrobiota = "#BC3F8E", Bacteria_Fibrobacterota = "#2E8B57", Bacteria_Gemmatimonadota  = "#800000", Bacteria_Ignavibacteriota = "#FFE5CC", Bacteria_Kiritimatiellaeota = "#DFA54E", Bacteria_Lentisphaerota  = "#808000", Bacteria_Myxococcota = "#8A2BE2", Bacteria_Nitrospinota = "#00FF00", Bacteria_Planctomycetota = "#CAE1FF", Bacteria_Pseudomonadota = "darkgoldenrod4", Bacteria_Rhodothermaeota = "#808080", Bacteria_Spirochaetota = "#FFFF00", Bacteria_Synergistota = "#F5DEB3",  Bacteria_Verrucomicrobiota = "#65ECEF", Bacteria_Zixibacteria = "hotpink2", `Bacteria_Unclassified bacteria`  = "#C0C0C0")
+
+
+
+set.seed(300000000) 
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(USCGs2, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 1,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+# Metagenome Epibolus
+highlight.sector(USCGs2$Species.Seq[which(USCGs2$Species.Seq == "E. pulchripes_Metagenome")],
+                 track.index = 1, col = "#e00272ff", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metatranscriptome Epibolus
+highlight.sector(USCGs2$Species.Seq[which(USCGs2$Species.Seq == "E. pulchripes_Metatranscriptome")],
+                 track.index = 1, col = "#8A2BE2", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metagenome Glomeris
+highlight.sector(USCGs2$Species.Seq[which(USCGs2$Species.Seq == "G. connexa_Metagenome")],
+                 track.index = 1, col = "#e00272ff", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metatranscriptome Glomeris
+highlight.sector(USCGs2$Species.Seq[which(USCGs2$Species.Seq == "G. connexa_Metatranscriptome")],
+                 track.index = 1, col = "#8A2BE2", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Viruses", title.adj = 0.1) 
+
+legend(x = -0.8, y = -0.5, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+
+
+
+
+
+
+
+
+
+# For Eukaryotes
+USCGs_40_COG_taxa_abundance$Species.Seq <- paste(USCGs_40_COG_taxa_abundance$Species.type, USCGs_40_COG_taxa_abundance$Seq.type, sep="_")
+
+USCGs_40_COG_taxa_abundance$Domain.phylum <- paste(USCGs_40_COG_taxa_abundance$Domain, USCGs_40_COG_taxa_abundance$Phylum, sep="_")
+
+USCGs_40_COG_taxa_abundance %>%
+subset(Domain == "Eukaryota") %>%
+filter(!`Common name` %in% c("Other Eukaryota", "Unclassified"))  %>%
+subset(TPM > 0) %>%
+group_by(Species.Seq, Domain.phylum) %>%
+reframe(DE = sum(TPM)/10000) ->
+USCGs3
+
+order <- c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome", "Eukaryota_Ascomycota", "Eukaryota_Basidiomycota", "Eukaryota_Oomycota", "Eukaryota_Chytridiomycota", "Eukaryota_Zoopagomycota" , "Eukaryota_Mucoromycota", "Eukaryota_Chlorophyta", "Eukaryota_Glaucophyta", "Eukaryota_Ochrophyta", "Eukaryota_Cryptophyta", "Eukaryota_Euglenozoa", "Eukaryota_Amoebozoa", "Eukaryota_Apicomplexa", "Eukaryota_Nematoda", "Eukaryota_Bigyra", "Eukaryota_Apusozoa", "Eukaryota_Rotosphaerida", "Eukaryota_Cercozoa", "Eukaryota_Choanoflagellata",  "Eukaryota_Retaria") 
+
+order1 =  c("G. connexa_Metatranscriptome", "G. connexa_Metagenome", "E. pulchripes_Metatranscriptome", "E. pulchripes_Metagenome")
+
+order2 =  c("Eukaryota_Ascomycota", "Eukaryota_Basidiomycota", "Eukaryota_Oomycota", "Eukaryota_Chytridiomycota", "Eukaryota_Zoopagomycota" , "Eukaryota_Mucoromycota", "Eukaryota_Chlorophyta", "Eukaryota_Glaucophyta", "Eukaryota_Ochrophyta", "Eukaryota_Cryptophyta", "Eukaryota_Euglenozoa", "Eukaryota_Amoebozoa", "Eukaryota_Apicomplexa", "Eukaryota_Nematoda", "Eukaryota_Bigyra", "Eukaryota_Apusozoa", "Eukaryota_Rotosphaerida", "Eukaryota_Cercozoa", "Eukaryota_Choanoflagellata",  "Eukaryota_Retaria")
+
+grid.col <- c(`G. connexa_Metatranscriptome` = "#8A2BE2", `G. connexa_Metagenome` = "#e00272ff", `E. pulchripes_Metatranscriptome` = "#8A2BE2", `E. pulchripes_Metagenome` = "#e00272ff", Eukaryota_Ascomycota = "#87CEFA", Eukaryota_Basidiomycota = "#FF4500", Eukaryota_Oomycota = "#00FFFF", Eukaryota_Chytridiomycota = "#B4CDCD", Eukaryota_Zoopagomycota = "#EE9A00", Eukaryota_Mucoromycota = "#EE4000", Eukaryota_Chlorophyta = "#4682B4", Eukaryota_Glaucophyta = "#B3EE3A", Eukaryota_Ochrophyta = "#FDFBB8", Eukaryota_Cryptophyta = "#B3EE3A", Eukaryota_Euglenozoa = "#FF0000", Eukaryota_Amoebozoa = "#003319", Eukaryota_Apicomplexa = "#047EF7", Eukaryota_Nematoda = "#2AACAC", Eukaryota_Bigyra  = "#FAF0E6", Eukaryota_Apusozoa = "#EEE685", Eukaryota_Rotosphaerida = "#6298C7", Eukaryota_Cercozoa = "#27408B", Eukaryota_Choanoflagellata = "#CD9B9B",  Eukaryota_Retaria = "#FFDAB9")
+
+
+grid.col1 =  c("G. connexa_Metatranscriptome" = "#8A2BE2", "G. connexa_Metagenome" = "#e00272ff", "E. pulchripes_Metatranscriptome" = "#8A2BE2", "E. pulchripes_Metagenome" = "#e00272ff")
+
+
+grid.col2 <- c(Eukaryota_Ascomycota = "#87CEFA", Eukaryota_Basidiomycota = "#FF4500", Eukaryota_Oomycota = "#00FFFF", Eukaryota_Chytridiomycota = "#B4CDCD", Eukaryota_Zoopagomycota = "#EE9A00", Eukaryota_Mucoromycota = "#EE4000", Eukaryota_Chlorophyta = "#4682B4", Eukaryota_Glaucophyta = "#B3EE3A", Eukaryota_Ochrophyta = "#FDFBB8", Eukaryota_Cryptophyta = "#B3EE3A", Eukaryota_Euglenozoa = "#FF0000", Eukaryota_Amoebozoa = "#003319", Eukaryota_Apicomplexa = "#047EF7", Eukaryota_Nematoda = "#2AACAC", Eukaryota_Bigyra  = "#FAF0E6", Eukaryota_Apusozoa = "#EEE685", Eukaryota_Rotosphaerida = "#6298C7", Eukaryota_Cercozoa = "#27408B", Eukaryota_Choanoflagellata = "#CD9B9B",  Eukaryota_Retaria = "#FFDAB9")
+
+
+
+
+set.seed(300000000) 
+# Plot chord diagram
+par(cex = 2.2, mar = c(0, 0, 0, 0))
+circos.clear()
+chordDiagram(USCGs3, annotationTrack = "grid", order = order, preAllocateTracks = 1, grid.col = grid.col, grid.border = 1, transparency = 0.7, annotationTrackHeight = mm_h(5))
+circos.info()
+
+# add labels and axis manually
+circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
+  xlim = get.cell.meta.data("xlim")
+  ylim = get.cell.meta.data("ylim")
+  sector.name = get.cell.meta.data("sector.index")
+
+  # print labels & text size (cex)
+  # circos.text(mean(xlim), ylim[1] + .7, sector.name,
+  #             facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex=0.6)
+
+  # print axis
+  circos.axis(h = "top", labels.cex = 0.8, major.tick.percentage = 1,
+              sector.index = sector.name, track.index = 2)
+}, bg.border = NA)
+
+# Metagenome Epibolus
+highlight.sector(USCGs3$Species.Seq[which(USCGs3$Species.Seq == "E. pulchripes_Metagenome")],
+                 track.index = 1, col = "#e00272ff", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metatranscriptome Epibolus
+highlight.sector(USCGs3$Species.Seq[which(USCGs3$Species.Seq == "E. pulchripes_Metatranscriptome")],
+                 track.index = 1, col = "#8A2BE2", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metagenome Glomeris
+highlight.sector(USCGs3$Species.Seq[which(USCGs3$Species.Seq == "G. connexa_Metagenome")],
+                 track.index = 1, col = "#e00272ff", padding = c(-.2, 0, -.3, 0),
+                 text = "MG", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+# Metatranscriptome Glomeris
+highlight.sector(USCGs3$Species.Seq[which(USCGs3$Species.Seq == "G. connexa_Metatranscriptome")],
+                 track.index = 1, col = "#8A2BE2", padding = c(-.2, 0, -.3, 0),
+                 text = "MT", cex = 1.2, text.col = "black", niceFacing = TRUE, )
+
+legend(x = 0.8, y = 1.2, 
+       legend = unique(order2), 
+        fill = grid.col2, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Viruses", title.adj = 0.1) 
+
+legend(x = -0.8, y = -0.5, 
+       legend = unique(order1), 
+       fill = grid.col1, 
+       bty = "n", cex = 0.8,
+       x.intersp = 0.5, 
+       title = "Species", title.adj = 0.1)
+
+
+
+# re-set circos parameters
+circos.clear()
+```
+
+
+
+
+
+**Viral-cell abundance**
+```{r load all the abundaces, cache = T}
+# Load all the abundance averaged at class level
+read_ods("vMR.ods", sheet = "DNA_RNA_Cell_abundance",  col_names = TRUE) ->
+DRC
+
+
+# Save an object to a file
+saveRDS(DRC, file = "RDS/DNA_RNA_Cell_abundance.rds")
+DRC <- readRDS("RDS/DNA_RNA_Cell_abundance.rds")
+
+
+DRC %>%
+  filter(!Domain %in% c("Other Eukaryota", "Unclassified"))  %>%
+  group_by(Species.type, Seq.type, Domain) %>%
+  summarise(DE = sum(TPM)) %>%
+  kable(., digits = c(0, 1, 1, 1, 0, 1)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = F) 
+
+
+
+
+# Abundance at common name level
+domain.col <- c(`DNA viruses` = "#00AFBB", `RNA viruses` = "#A3DD57", "Algae" = "#636363", "Bacteria" = "#428953", "Archaea" = "#FF8B07", "Fungi" = "#CE2929", "Protists" = "#800080", "Gut worms" = "#FF00FF")
+
+
+# Plot 
+DRC %>%
+  filter(!Domain %in% c("Other Eukaryota", "Unclassified"))  %>%
+  group_by(Species.type, Seq.type, Domain) %>%
+  summarise(DE = sum(TPM)/1000000) ->
+USCGs0 
+
+
+
+ggplot(USCGs0) + theme_bw() + geom_linerange(aes(x = Species.type, ymin = 0, ymax = DE, colour = Domain), position = position_dodge(width = 1)) +
+geom_point(aes(x = Species.type, y = DE, colour = Domain), size = 8, position = position_dodge(width = 1)) +
+facet_wrap(~Seq.type, ncol = 1) + xlab("Species.type") +  ylab("Relative abundance (TPM*10^6)") +
+scale_colour_manual(values = domain.col) +
+theme(axis.text=element_text(size=30, colour="black"), axis.ticks=element_line(size=1), axis.title = element_text(size = 24),  legend.title = element_text(size = 28), strip.text.x = element_text(size=26), legend.text = element_text(colour="black", size = 24)) 
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+**Load VMR for DNA and RNA viruses in E. pulchripes and G. connexa**
+```{r load VMR, cache = T}
+# Load data
+read_ods("vMR.ods", sheet = "VMR",  col_names = TRUE) ->
+VMR
+
+
+# Calculate the viral-host ratio for DNA viruses
+DNA_viral_host_ratio <- VMR %>%
+  subset(Seq.type == "Metagenome") %>%
+  filter(Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists", "DNA viruses")) %>%
+  group_by(Species.type, Seq.type) %>%
+  summarise(Viral_Host_Ratio_DNA = sum(TPM[Domain == "DNA viruses"]) / sum(TPM[Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists")]))
+
+# Calculate the viral-host ratio for RNA viruses
+RNA_viral_host_ratio <- VMR %>%
+  filter(Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists", "RNA viruses")) %>%
+  group_by(Species.type, Seq.type) %>%
+  summarise(Viral_Host_Ratio_RNA = sum(TPM[Domain == "RNA viruses"]) / sum(TPM[Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists")]))
+
+# Merge the viral-host ratio data frames and create a new column for abundance
+viral_host_ratio <- full_join(DNA_viral_host_ratio, RNA_viral_host_ratio, by = c("Species.type", "Seq.type")) %>%
+  mutate(Abundance = coalesce(Viral_Host_Ratio_DNA, Viral_Host_Ratio_RNA))
+
+
+
+# Plotting the viral-host ratio
+
+ggplot(viral_host_ratio, aes(x = Species.type, y = Abundance, fill = Seq.type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Species Type", y = "Viral-host ratio", fill = "Seq Type") +
+  facet_wrap(~Seq.type, ncol = 1) +
+  theme_bw() +  ylab("mVBR") +
+  theme(axis.text=element_text(size=30, colour="black"), axis.ticks=element_line(size=1), axis.title = element_text(size = 24), legend.position="none", strip.text.x = element_text(size=26)) 
+
+
+
+
+
+
+
+
+
+# Using the replicate values
+# Load data2
+read_ods("vMR.ods", sheet = "VMR2",  col_names = TRUE) ->
+VMR2
+
+# Save an object to a file
+saveRDS(DRC, file = "RDS/VMR2.rds")
+
+VMR2 <- readRDS("RDS/VMR2.rds")
+
+# Calculate the virus-to-bacteria ratio
+ratio <- V2 %>%
+  filter(Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists", "DNA viruses", "RNA viruses")) %>%
+  group_by(Species.type, Seq.type, Replicates) %>%
+  summarise(
+    Viral_Host_Ratio_DNA = sum(TPM[Domain == "DNA viruses"]) / sum(TPM[Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists")]),
+    Viral_Host_Ratio_RNA = sum(TPM[Domain == "RNA viruses"]) / sum(TPM[Domain %in% c("Bacteria", "Archaea", "Fungi", "Algae", "Protists")])
+  )
+
+# Calculate average ratio
+ratio_avg <- ratio %>%
+  group_by(Species.type, Seq.type) %>%
+  summarise(
+    Avg_Viral_Host_Ratio_DNA = mean(Viral_Host_Ratio_DNA),
+    Avg_Viral_Host_Ratio_RNA = mean(Viral_Host_Ratio_RNA)
+  )
+
+# Calculate standard error based on virus-bacteria ratio
+se <- ratio %>%
+  group_by(Species.type, Seq.type) %>%
+  summarise(
+    se_DNA = sd(Viral_Host_Ratio_DNA) / sqrt(n()),
+    se_RNA = sd(Viral_Host_Ratio_RNA) / sqrt(n())
+  )
+
+# Calculate average standard error
+se_avg <- se %>%
+  group_by(Species.type, Seq.type) %>%
+  summarise(
+    Avg_se_DNA = mean(se_DNA),
+    Avg_se_RNA = mean(se_RNA)
+  )
+
+# Merge average ratio and average standard error
+result <- full_join(ratio_avg, se_avg, by = c("Species.type", "Seq.type"))
+
+# Create "Abundance" and "std" columns
+viral_host_ratio <- result %>% 
+  mutate(Abundance = ifelse(Avg_Viral_Host_Ratio_DNA == 0, Avg_Viral_Host_Ratio_RNA, Avg_Viral_Host_Ratio_DNA),
+         std = ifelse(Avg_se_DNA == 0, Avg_se_RNA, Avg_se_DNA)) %>%
+  dplyr::select(Species.type, Seq.type, Abundance, std)
+
+
+# Plot the virus-to-bacteria ratios with error bars
+vbr.col <- c(Metatranscriptome = "#8A2BE2", Metagenome = "#e00272ff")
+
+ggplot(viral_host_ratio, aes(x = Species.type, y = Abundance, fill = Seq.type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = Abundance - std, ymax = Abundance + std),
+                width = 0.2, position = position_dodge(0.9)) +
+  labs(x = "Species.type", y = "Virus-to-Microbial Ratio (mVBR)", fill = "Seq.type") +
+  facet_wrap(~Seq.type, ncol = 1) +
+  theme_bw() + scale_fill_manual(values = vbr.col) +  
+  theme(axis.text=element_text(size=30, colour="black"), axis.ticks=element_line(size=1), axis.title = element_text(size = 24), legend.position="none", strip.text.x = element_text(size=26))
+```
